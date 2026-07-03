@@ -1,0 +1,688 @@
+﻿prompt,start_image,end_image,duration,resolution,aspect_ratio,seed,guide_scale,steps
+"D. 15-SECOND IMAGE-TO-VIDEO ANIMATION PROMPT
+
+TITLE
+
+""Toward the Center of History""
+
+Duration:
+15 seconds
+
+FIRST KEYFRAME
+
+""The World Before the Discovery""
+
+LAST KEYFRAME
+
+""Ninety Miles""
+
+VISUAL CONCEPT
+
+This sequence is about narrowing focus.
+
+The world begins vast and indifferent.
+
+The audience is gradually guided toward a tiny location that will soon command the attention of the entire planet.
+
+The emotional power comes from scale inversion.
+
+The world becomes smaller.
+
+The island becomes larger.
+
+History becomes concentrated.
+
+SECONDS 0–5
+
+The camera begins suspended above the Caribbean from extreme altitude.
+
+Earth curvature visible.
+
+Cloud systems drift slowly.
+
+Sunlight glitters across the ocean.
+
+No aircraft visible.
+
+No military activity visible.
+
+Only immense planetary scale.
+
+The camera begins a slow, almost imperceptible descent.
+
+Atmospheric haze shifts subtly.
+
+Cloud shadows move across water.
+
+Emotional state:
+
+Detachment.
+
+Distance.
+
+The world appears peaceful.
+
+SECONDS 5–10
+
+The camera continues descending.
+
+Individual islands become more recognizable.
+
+The Caribbean transforms from abstract geography into a real place.
+
+Cloud formations drift past camera.
+
+The audience begins sensing a destination.
+
+The movement should feel inevitable.
+
+Not rushed.
+
+The visual message:
+
+Something hidden below deserves attention.
+
+Emotional state:
+
+Curiosity.
+
+Anticipation.
+
+Growing focus.
+
+SECONDS 10–15
+
+Cuba gradually becomes dominant.
+
+The surrounding Caribbean recedes.
+
+The island fills more of the frame.
+
+Cloud shadows move across the landscape.
+
+The coastline facing Florida becomes visible.
+
+The camera slows.
+
+Almost stops.
+
+Final 3 seconds:
+
+Hold on Cuba.
+
+No military hardware.
+
+No visible threat.
+
+Only a small island surrounded by water.
+
+The audience understands:
+
+History has concentrated itself into this seemingly ordinary place.
+
+CAMERA LANGUAGE
+
+Beginning:
+70mm IMAX aerial lens.
+
+Middle:
+Slow descending aerial documentary move.
+
+Ending:
+135mm reconnaissance-style observation lens.
+
+Movement:
+Continuous slow descent.
+
+No cuts.
+
+No abrupt transitions.
+
+LIGHTING EVOLUTION
+
+Consistent tropical daylight.
+
+Gradual increase in landscape detail.
+
+Atmospheric haze reduces as altitude decreases.
+
+ATMOSPHERIC EFFECTS
+
+High-altitude haze.
+
+Cloud drift.
+
+Ocean reflections.
+
+Cloud shadows.
+
+Subtle atmospheric depth.
+
+VISUAL STYLE
+
+Premium documentary cinematography.
+
+Cold War realism.
+
+National Geographic aerial photography.
+
+Large-format IMAX visuals.
+
+Photorealistic historical atmosphere.
+
+MOTION INTENSITY
+
+Low.
+
+Slow.
+
+Observational.
+
+Meditative.
+
+EMOTIONAL JOURNEY
+
+Planetary Scale
+
+?
+
+Focused Observation
+
+?
+
+Hidden Historical Significance
+
+NEGATIVE PROMPT
+
+Explosions.
+Missile launches.
+Military action.
+Science-fiction imagery.
+Modern aircraft.
+Fast camera moves.
+Action-movie pacing.
+Flashy transitions.
+Sensational effects.
+Overly dramatic color grading.",Cuba_from_extreme_altitude_202606100411.jpg,Cockpit_view_seventy_thousand_feet_202606100410.jpg,15 Seconds (361 frames),720p,16:9 Landscape,-1,3,8
+"TITLE
+
+""Toward the Center of History""
+
+Duration:
+15 seconds
+
+FIRST KEYFRAME
+
+""The World Before the Discovery""
+
+LAST KEYFRAME
+
+""Ninety Miles""
+
+VISUAL CONCEPT
+
+This sequence is about narrowing focus.
+
+The world begins vast and indifferent.
+
+The audience is gradually guided toward a tiny location that will soon command the attention of the entire planet.
+
+The emotional power comes from scale inversion.
+
+The world becomes smaller.
+
+The island becomes larger.
+
+History becomes concentrated.
+
+SECONDS 0–5
+
+The camera begins suspended above the Caribbean from extreme altitude.
+
+Earth curvature visible.
+
+Cloud systems drift slowly.
+
+Sunlight glitters across the ocean.
+
+No aircraft visible.
+
+No military activity visible.
+
+Only immense planetary scale.
+
+The camera begins a slow, almost imperceptible descent.
+
+Atmospheric haze shifts subtly.
+
+Cloud shadows move across water.
+
+Emotional state:
+
+Detachment.
+
+Distance.
+
+The world appears peaceful.
+
+SECONDS 5–10
+
+The camera continues descending.
+
+Individual islands become more recognizable.
+
+The Caribbean transforms from abstract geography into a real place.
+
+Cloud formations drift past camera.
+
+The audience begins sensing a destination.
+
+The movement should feel inevitable.
+
+Not rushed.
+
+The visual message:
+
+Something hidden below deserves attention.
+
+Emotional state:
+
+Curiosity.
+
+Anticipation.
+
+Growing focus.
+
+SECONDS 10–15
+
+Cuba gradually becomes dominant.
+
+The surrounding Caribbean recedes.
+
+The island fills more of the frame.
+
+Cloud shadows move across the landscape.
+
+The coastline facing Florida becomes visible.
+
+The camera slows.
+
+Almost stops.
+
+Final 3 seconds:
+
+Hold on Cuba.
+
+No military hardware.
+
+No visible threat.
+
+Only a small island surrounded by water.
+
+The audience understands:
+
+History has concentrated itself into this seemingly ordinary place.
+
+CAMERA LANGUAGE
+
+Beginning:
+70mm IMAX aerial lens.
+
+Middle:
+Slow descending aerial documentary move.
+
+Ending:
+135mm reconnaissance-style observation lens.
+
+Movement:
+Continuous slow descent.
+
+No cuts.
+
+No abrupt transitions.
+
+LIGHTING EVOLUTION
+
+Consistent tropical daylight.
+
+Gradual increase in landscape detail.
+
+Atmospheric haze reduces as altitude decreases.
+
+ATMOSPHERIC EFFECTS
+
+High-altitude haze.
+
+Cloud drift.
+
+Ocean reflections.
+
+Cloud shadows.
+
+Subtle atmospheric depth.
+
+VISUAL STYLE
+
+Premium documentary cinematography.
+
+Cold War realism.
+
+National Geographic aerial photography.
+
+Large-format IMAX visuals.
+
+Photorealistic historical atmosphere.
+
+MOTION INTENSITY
+
+Low.
+
+Slow.
+
+Observational.
+
+Meditative.
+
+EMOTIONAL JOURNEY
+
+Planetary Scale
+
+?
+
+Focused Observation
+
+?
+
+Hidden Historical Significance
+
+NEGATIVE PROMPT
+
+Explosions.
+Missile launches.
+Military action.
+Science-fiction imagery.
+Modern aircraft.
+Fast camera moves.
+Action-movie pacing.
+Flashy transitions.
+Sensational effects.
+Overly dramatic color grading.",start2.jpg,,15 Seconds (361 frames),720p,16:9 Landscape,-1,3,8
+"TITLE
+
+""From Light to Destiny""
+
+DURATION
+
+15 seconds
+
+FIRST KEYFRAME
+
+""The Moment Before History Knows""
+
+LAST KEYFRAME
+
+""The Weight of Knowledge""
+
+VISUAL CONCEPT
+
+This sequence is about a hidden truth traveling from observation to revelation.
+
+The audience should experience the transformation of information.
+
+A beam of light enters a camera.
+
+A photograph is exposed.
+
+A truth is captured.
+
+That truth slowly acquires enough weight to threaten civilization itself.
+
+The sequence should feel less like military history and more like the birth of destiny.
+
+SECONDS 0–5
+
+The camera begins beside the U-2 reconnaissance camera system.
+
+Slow cinematic push forward.
+
+Mechanical film rollers move with extraordinary precision.
+
+Tiny vibrations ripple through metal surfaces.
+
+Bright Caribbean sunlight enters the optical system.
+
+Clouds drift slowly beneath the aircraft.
+
+The pilot remains barely visible.
+
+Anonymous.
+
+Focused.
+
+Routine.
+
+The shutter mechanism activates.
+
+Once.
+
+Twice.
+
+Again.
+
+Frame after frame after frame.
+
+Each exposure feels insignificant.
+
+The audience understands nothing dramatic appears to be happening.
+
+Emotional State:
+
+Routine observation.
+
+Professional calm.
+
+Hidden significance.
+
+SECONDS 5–10
+
+The camera moves closer to the exposed film itself.
+
+Film frames advance through the machinery.
+
+Individual photographic images become visible.
+
+The audience travels through the film strip.
+
+Each frame becomes larger.
+
+Roads.
+
+Fields.
+
+Shadows.
+
+Structures.
+
+Patterns.
+
+The environment grows darker.
+
+The atmosphere becomes more focused.
+
+What first appeared ordinary begins feeling increasingly consequential.
+
+The camera passes from one frame to another.
+
+A visual tunnel of information.
+
+Light gradually transforms into darkness surrounding the imagery.
+
+Emotional State:
+
+Discovery.
+
+Recognition.
+
+Escalating significance.
+
+SECONDS 10–15
+
+The film frame expands until it fills the screen.
+
+The photographic image seamlessly transforms into a glowing intelligence light table.
+
+The camera emerges inside the dark analysis room.
+
+Analysts appear only as silhouettes.
+
+The camera glides slowly across illuminated film strips.
+
+Missile installations become recognizable.
+
+Annotations appear.
+
+Grease-pencil markings.
+
+Interpretation overlays.
+
+The room remains silent.
+
+No panic.
+
+No speeches.
+
+Only realization.
+
+Final three seconds:
+
+The camera stops above a strip of film.
+
+The surrounding darkness grows deeper.
+
+The glowing photographs become the only visible object.
+
+The audience understands:
+
+Human civilization is no longer reacting to weapons.
+
+It is reacting to knowledge.
+
+Hold.
+
+End.
+
+CAMERA LANGUAGE
+
+Beginning:
+
+50mm engineering documentary lens.
+
+Macro mechanical detail.
+
+Middle:
+
+Extreme macro film-travel perspective.
+
+Ending:
+
+85mm intelligence-analysis lens.
+
+Slow observational movement.
+
+No cuts.
+
+No rapid motion.
+
+No action-style cinematography.
+
+LIGHTING EVOLUTION
+
+Bright Caribbean sunlight.
+
+?
+
+Focused optical highlights.
+
+?
+
+Film illumination.
+
+?
+
+Darkness surrounding information.
+
+?
+
+Glowing intelligence light table.
+
+ATMOSPHERIC EFFECTS
+
+High-altitude haze.
+
+Subtle aircraft vibration.
+
+Dust particles suspended above film.
+
+Light scattering through optical glass.
+
+Dark-room atmosphere.
+
+Soft illuminated particulate matter.
+
+VISUAL STYLE
+
+Premium Netflix documentary.
+
+Cold War archival authenticity.
+
+Photorealistic cinematography.
+
+Large-format IMAX realism.
+
+Museum-quality historical reconstruction.
+
+MOTION INTENSITY
+
+Low.
+
+Measured.
+
+Deliberate.
+
+The tension comes from revelation rather than action.
+
+EMOTIONAL JOURNEY
+
+Routine Observation
+
+?
+
+Hidden Discovery
+
+?
+
+The Burden of Knowledge
+
+NEGATIVE PROMPT
+
+Explosions.
+
+Missile launches.
+
+Mushroom clouds.
+
+Action-movie pacing.
+
+Fast edits.
+
+Modern technology.
+
+Science-fiction visuals.
+
+Video-game aesthetics.
+
+Overly dramatic CGI.
+
+Sensational effects.
+
+Hollywood disaster imagery.",Camera_equipment_in_aircraft_202606100424.jpg,Intelligence_analysis_room_Octob…_202606100426.png,15 Seconds (361 frames),720p,16:9 Landscape,-1,3,8
