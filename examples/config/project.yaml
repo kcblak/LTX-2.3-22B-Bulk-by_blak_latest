@@ -1,0 +1,9 @@
+﻿profile: balanced
+paths:
+  jobs_csv_path: examples/projects/small-project/jobs.csv
+  reference_images_dir: examples/projects/small-project
+pipeline:
+  enable_stitching: true
+  cache_enabled: true
+drive:
+  enable_drive_upload: false

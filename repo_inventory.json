@@ -1,0 +1,1640 @@
+{
+  "files": [
+    {
+      "path": "benchmarking/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "runner"
+      ]
+    },
+    {
+      "path": "benchmarking/runner.py",
+      "lines": 22,
+      "classes": [
+        {
+          "name": "BenchmarkComparator",
+          "methods": [
+            "compare"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "pathlib",
+        "typing"
+      ]
+    },
+    {
+      "path": "bootstrap.py",
+      "lines": 128,
+      "classes": [],
+      "functions": [
+        "check_python_version",
+        "check_dependencies",
+        "check_disk_space",
+        "collect_environment_info",
+        "check_gpu",
+        "bootstrap"
+      ],
+      "imports": [
+        "os",
+        "platform",
+        "sys",
+        "shutil",
+        "pathlib",
+        "config",
+        "core",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "cache_system/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "store"
+      ]
+    },
+    {
+      "path": "cache_system/store.py",
+      "lines": 174,
+      "classes": [
+        {
+          "name": "CacheEntry",
+          "methods": [
+            "to_dict"
+          ]
+        },
+        {
+          "name": "RenderCacheStore",
+          "methods": [
+            "build_cache_key",
+            "lookup",
+            "register",
+            "invalidate"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "threading",
+        "dataclasses",
+        "datetime",
+        "pathlib",
+        "typing",
+        "config",
+        "jobs.job",
+        "logging_system",
+        "utils"
+      ]
+    },
+    {
+      "path": "config/__init__.py",
+      "lines": 4,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "config",
+        "loader"
+      ]
+    },
+    {
+      "path": "config/config.py",
+      "lines": 228,
+      "classes": [
+        {
+          "name": "Config",
+          "methods": [
+            "from_dict",
+            "to_dict"
+          ]
+        }
+      ],
+      "functions": [
+        "_is_path_annotation"
+      ],
+      "imports": [
+        "dataclasses",
+        "pathlib",
+        "typing",
+        "core"
+      ]
+    },
+    {
+      "path": "config/loader.py",
+      "lines": 245,
+      "classes": [],
+      "functions": [
+        "_load_yaml_file",
+        "_flatten_config_sections",
+        "_deep_merge",
+        "_parse_env_value",
+        "_load_env_overrides",
+        "_normalize_paths",
+        "_migrate_config",
+        "_apply_profile",
+        "_non_none_values",
+        "_finalize_runtime_fields",
+        "load_config"
+      ],
+      "imports": [
+        "json",
+        "os",
+        "uuid",
+        "pathlib",
+        "typing",
+        "config.config",
+        "config.profiles",
+        "core"
+      ]
+    },
+    {
+      "path": "config/profiles.py",
+      "lines": 43,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "typing"
+      ]
+    },
+    {
+      "path": "core/__init__.py",
+      "lines": 127,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "enums",
+        "exceptions",
+        "constants",
+        "interfaces",
+        "version"
+      ]
+    },
+    {
+      "path": "core/constants.py",
+      "lines": 36,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "pathlib"
+      ]
+    },
+    {
+      "path": "core/enums.py",
+      "lines": 79,
+      "classes": [
+        {
+          "name": "JobStatus",
+          "methods": []
+        },
+        {
+          "name": "Duration",
+          "methods": [
+            "from_string"
+          ]
+        },
+        {
+          "name": "Resolution",
+          "methods": [
+            "from_string"
+          ]
+        },
+        {
+          "name": "AspectRatio",
+          "methods": [
+            "from_string"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "enum"
+      ]
+    },
+    {
+      "path": "core/exceptions.py",
+      "lines": 53,
+      "classes": [
+        {
+          "name": "LTXBulkRendererError",
+          "methods": []
+        },
+        {
+          "name": "ValidationError",
+          "methods": []
+        },
+        {
+          "name": "RenderError",
+          "methods": []
+        },
+        {
+          "name": "RendererInitializationError",
+          "methods": []
+        },
+        {
+          "name": "RendererInputError",
+          "methods": []
+        },
+        {
+          "name": "RendererOOMError",
+          "methods": []
+        },
+        {
+          "name": "RendererEncodingError",
+          "methods": []
+        },
+        {
+          "name": "RendererOutputValidationError",
+          "methods": []
+        },
+        {
+          "name": "StorageError",
+          "methods": []
+        },
+        {
+          "name": "DriveError",
+          "methods": []
+        },
+        {
+          "name": "BootstrapError",
+          "methods": []
+        },
+        {
+          "name": "ConfigurationError",
+          "methods": []
+        }
+      ],
+      "functions": [],
+      "imports": []
+    },
+    {
+      "path": "core/interfaces.py",
+      "lines": 250,
+      "classes": [
+        {
+          "name": "RenderParams",
+          "methods": []
+        },
+        {
+          "name": "RenderMetrics",
+          "methods": []
+        },
+        {
+          "name": "RenderedClip",
+          "methods": []
+        },
+        {
+          "name": "RenderResult",
+          "methods": []
+        },
+        {
+          "name": "RendererSessionInfo",
+          "methods": []
+        },
+        {
+          "name": "RemoteFileMetadata",
+          "methods": []
+        },
+        {
+          "name": "DriveProjectPaths",
+          "methods": []
+        },
+        {
+          "name": "UploadMetrics",
+          "methods": []
+        },
+        {
+          "name": "UploadTask",
+          "methods": []
+        },
+        {
+          "name": "UploadResult",
+          "methods": []
+        },
+        {
+          "name": "IRenderer",
+          "methods": [
+            "initialize",
+            "validate_parameters",
+            "generate_clip",
+            "cleanup"
+          ]
+        },
+        {
+          "name": "IStorage",
+          "methods": [
+            "get_temp_path",
+            "get_output_path",
+            "verify_file",
+            "cleanup_temp"
+          ]
+        },
+        {
+          "name": "IDriveClient",
+          "methods": [
+            "connect",
+            "create_folder",
+            "ensure_project_structure",
+            "list_directory",
+            "find_file_by_name",
+            "get_metadata",
+            "upload_file",
+            "verify_upload",
+            "download_file",
+            "delete_remote_file"
+          ]
+        },
+        {
+          "name": "IReporter",
+          "methods": [
+            "generate_summary",
+            "save_json_report",
+            "save_text_report"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "abc",
+        "dataclasses",
+        "pathlib",
+        "typing"
+      ]
+    },
+    {
+      "path": "core/version.py",
+      "lines": 2,
+      "classes": [],
+      "functions": [],
+      "imports": []
+    },
+    {
+      "path": "diagnose.py",
+      "lines": 67,
+      "classes": [],
+      "functions": [
+        "build_argument_parser",
+        "main"
+      ],
+      "imports": [
+        "argparse",
+        "sys",
+        "pathlib",
+        "config",
+        "diagnostics",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "diagnostics/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "runner"
+      ]
+    },
+    {
+      "path": "diagnostics/runner.py",
+      "lines": 141,
+      "classes": [
+        {
+          "name": "DiagnosticsResult",
+          "methods": [
+            "to_dict"
+          ]
+        },
+        {
+          "name": "DiagnosticsRunner",
+          "methods": [
+            "run",
+            "save"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "socket",
+        "dataclasses",
+        "datetime",
+        "pathlib",
+        "typing",
+        "bootstrap",
+        "config",
+        "logging_system",
+        "validation"
+      ]
+    },
+    {
+      "path": "drive/__init__.py",
+      "lines": 4,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "gdrive",
+        "sync_engine"
+      ]
+    },
+    {
+      "path": "drive/gdrive.py",
+      "lines": 269,
+      "classes": [
+        {
+          "name": "GoogleDriveClient",
+          "methods": [
+            "connect",
+            "create_folder",
+            "ensure_project_structure",
+            "list_directory",
+            "find_file_by_name",
+            "get_metadata",
+            "upload_file",
+            "verify_upload",
+            "download_file",
+            "delete_remote_file"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "mimetypes",
+        "threading",
+        "time",
+        "pathlib",
+        "typing",
+        "config",
+        "core",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "drive/sync_engine.py",
+      "lines": 425,
+      "classes": [
+        {
+          "name": "DriveSyncEngine",
+          "methods": [
+            "connect",
+            "start",
+            "reconcile_jobs",
+            "enqueue_job",
+            "sync_artifact",
+            "wait_for_completion",
+            "shutdown",
+            "get_metrics"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "datetime",
+        "threading",
+        "time",
+        "queue",
+        "typing",
+        "config",
+        "core",
+        "jobs.job",
+        "jobs.job_queue",
+        "logging_system",
+        "utils"
+      ]
+    },
+    {
+      "path": "engine/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "pipeline"
+      ]
+    },
+    {
+      "path": "engine/pipeline.py",
+      "lines": 393,
+      "classes": [
+        {
+          "name": "Pipeline",
+          "methods": [
+            "run"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "datetime",
+        "pathlib",
+        "shutil",
+        "typing",
+        "cache_system",
+        "config",
+        "core",
+        "drive.gdrive",
+        "drive.sync_engine",
+        "jobs.job_queue",
+        "logging_system",
+        "observability.failures",
+        "renderers.factory",
+        "reports.report_generator",
+        "storage.local_storage",
+        "stitching",
+        "utils"
+      ]
+    },
+    {
+      "path": "jobs/__init__.py",
+      "lines": 6,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "job",
+        "job_queue",
+        "manifest",
+        "csv_parser"
+      ]
+    },
+    {
+      "path": "jobs/csv_parser.py",
+      "lines": 55,
+      "classes": [],
+      "functions": [
+        "parse_jobs_from_csv"
+      ],
+      "imports": [
+        "csv",
+        "pathlib",
+        "typing",
+        "core",
+        "jobs.job",
+        "utils",
+        "validation",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "jobs/job.py",
+      "lines": 113,
+      "classes": [
+        {
+          "name": "Job",
+          "methods": [
+            "to_dict",
+            "from_dict"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "dataclasses",
+        "datetime",
+        "pathlib",
+        "typing",
+        "core"
+      ]
+    },
+    {
+      "path": "jobs/job_queue.py",
+      "lines": 94,
+      "classes": [
+        {
+          "name": "JobQueue",
+          "methods": [
+            "get_next_job",
+            "update_job",
+            "get_job",
+            "get_jobs_by_statuses",
+            "get_jobs_needing_upload",
+            "get_jobs_by_status",
+            "all_completed"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "threading",
+        "typing",
+        "jobs.job",
+        "core",
+        "config",
+        "jobs.csv_parser",
+        "jobs.manifest",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "jobs/manifest.py",
+      "lines": 61,
+      "classes": [
+        {
+          "name": "Manifest",
+          "methods": [
+            "exists",
+            "load",
+            "save",
+            "update_job"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "threading",
+        "pathlib",
+        "typing",
+        "datetime",
+        "jobs.job",
+        "config",
+        "core",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "logging_system/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "logger"
+      ]
+    },
+    {
+      "path": "logging_system/logger.py",
+      "lines": 211,
+      "classes": [
+        {
+          "name": "ContextFilter",
+          "methods": [
+            "filter"
+          ]
+        },
+        {
+          "name": "LoggerNamePrefixFilter",
+          "methods": [
+            "filter"
+          ]
+        },
+        {
+          "name": "MinLevelFilter",
+          "methods": [
+            "filter"
+          ]
+        },
+        {
+          "name": "JsonLogFormatter",
+          "methods": [
+            "format"
+          ]
+        },
+        {
+          "name": "HumanReadableFormatter",
+          "methods": [
+            "format"
+          ]
+        }
+      ],
+      "functions": [
+        "_ensure_trace_level",
+        "_resolve_log_level",
+        "_cleanup_old_logs",
+        "_build_rotating_handler",
+        "_add_handler",
+        "setup_logging",
+        "get_logger"
+      ],
+      "imports": [
+        "gzip",
+        "json",
+        "logging",
+        "logging.handlers",
+        "shutil",
+        "sys",
+        "time",
+        "pathlib",
+        "config"
+      ]
+    },
+    {
+      "path": "main.py",
+      "lines": 377,
+      "classes": [],
+      "functions": [
+        "_parse_override_value",
+        "_parse_runtime_overrides",
+        "_build_cli_overrides",
+        "build_argument_parser",
+        "main"
+      ],
+      "imports": [
+        "argparse",
+        "json",
+        "sys",
+        "typing",
+        "pathlib",
+        "bootstrap",
+        "config",
+        "core",
+        "diagnostics",
+        "engine.pipeline",
+        "logging_system",
+        "observability",
+        "observability.failures",
+        "preflight",
+        "renderers.factory"
+      ]
+    },
+    {
+      "path": "observability/__init__.py",
+      "lines": 4,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "bus",
+        "runtime"
+      ]
+    },
+    {
+      "path": "observability/bus.py",
+      "lines": 32,
+      "classes": [
+        {
+          "name": "Event",
+          "methods": []
+        },
+        {
+          "name": "EventBus",
+          "methods": [
+            "subscribe",
+            "publish"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "dataclasses",
+        "datetime",
+        "threading",
+        "typing"
+      ]
+    },
+    {
+      "path": "observability/failures.py",
+      "lines": 161,
+      "classes": [
+        {
+          "name": "FailureInfo",
+          "methods": []
+        }
+      ],
+      "functions": [
+        "classify_exception",
+        "classify_render_failure"
+      ],
+      "imports": [
+        "dataclasses",
+        "typing",
+        "core"
+      ]
+    },
+    {
+      "path": "observability/runtime.py",
+      "lines": 213,
+      "classes": [
+        {
+          "name": "RuntimeMonitor",
+          "methods": [
+            "attach",
+            "start",
+            "stop",
+            "set_status",
+            "set_current_job",
+            "set_upload_queue_length",
+            "record_render_time",
+            "record_upload_time",
+            "record_error",
+            "collect_snapshot",
+            "get_snapshot",
+            "write_heartbeat",
+            "export"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "threading",
+        "time",
+        "collections",
+        "datetime",
+        "typing",
+        "config",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "preflight/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "analyzer"
+      ]
+    },
+    {
+      "path": "preflight/analyzer.py",
+      "lines": 215,
+      "classes": [
+        {
+          "name": "PreflightResult",
+          "methods": [
+            "blocking_failures",
+            "warnings",
+            "ready",
+            "to_dict"
+          ]
+        },
+        {
+          "name": "PreflightAnalyzer",
+          "methods": [
+            "analyze",
+            "save",
+            "build_console_summary"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "csv",
+        "json",
+        "dataclasses",
+        "datetime",
+        "pathlib",
+        "typing",
+        "config",
+        "logging_system",
+        "validation"
+      ]
+    },
+    {
+      "path": "renderers/__init__.py",
+      "lines": 14,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "base",
+        "factory",
+        "ltx_renderer",
+        "wan2gp_ltx_renderer"
+      ]
+    },
+    {
+      "path": "renderers/base.py",
+      "lines": 86,
+      "classes": [
+        {
+          "name": "RendererPluginSpec",
+          "methods": [
+            "is_available",
+            "auto_priority",
+            "create"
+          ]
+        }
+      ],
+      "functions": [
+        "register_renderer_plugin",
+        "discover_renderer_plugins",
+        "get_renderer_plugin",
+        "list_renderer_plugins"
+      ],
+      "imports": [
+        "importlib",
+        "pkgutil",
+        "dataclasses",
+        "typing",
+        "config",
+        "core"
+      ]
+    },
+    {
+      "path": "renderers/factory.py",
+      "lines": 38,
+      "classes": [],
+      "functions": [
+        "create_renderer",
+        "get_available_renderer_backends"
+      ],
+      "imports": [
+        "config",
+        "core",
+        "renderers.base"
+      ]
+    },
+    {
+      "path": "renderers/ltx_renderer.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "renderers.plugins.diffusers_backend"
+      ]
+    },
+    {
+      "path": "renderers/plugins/__init__.py",
+      "lines": 1,
+      "classes": [],
+      "functions": [],
+      "imports": []
+    },
+    {
+      "path": "renderers/plugins/diffusers_backend.py",
+      "lines": 510,
+      "classes": [
+        {
+          "name": "LTXVideoRenderer",
+          "methods": [
+            "initialize",
+            "validate_parameters",
+            "generate_clip",
+            "cleanup"
+          ]
+        }
+      ],
+      "functions": [
+        "_diffusers_available",
+        "_diffusers_auto_priority"
+      ],
+      "imports": [
+        "gc",
+        "time",
+        "pathlib",
+        "typing",
+        "numpy",
+        "torch",
+        "PIL",
+        "config",
+        "core",
+        "logging_system",
+        "renderers.base",
+        "utils"
+      ]
+    },
+    {
+      "path": "renderers/plugins/wan2gp_backend.py",
+      "lines": 324,
+      "classes": [
+        {
+          "name": "Wan2GPLTXRenderer",
+          "methods": [
+            "initialize",
+            "generate_clip",
+            "cleanup"
+          ]
+        }
+      ],
+      "functions": [
+        "_wan2gp_available",
+        "_wan2gp_auto_priority"
+      ],
+      "imports": [
+        "os",
+        "sys",
+        "time",
+        "pathlib",
+        "typing",
+        "torch",
+        "config",
+        "core",
+        "logging_system",
+        "renderers.base",
+        "renderers.plugins.diffusers_backend"
+      ]
+    },
+    {
+      "path": "renderers/wan2gp_ltx_renderer.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "renderers.plugins.wan2gp_backend"
+      ]
+    },
+    {
+      "path": "reports/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "report_generator"
+      ]
+    },
+    {
+      "path": "reports/report_generator.py",
+      "lines": 341,
+      "classes": [
+        {
+          "name": "ReportGenerator",
+          "methods": [
+            "generate_summary",
+            "save_json_report",
+            "save_text_report",
+            "save_csv_report",
+            "save_performance_report",
+            "save_benchmark_json",
+            "save_benchmark_csv",
+            "save_performance_summary",
+            "save_validation_report",
+            "save_diagnostics_report",
+            "save_all"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "csv",
+        "json",
+        "datetime",
+        "pathlib",
+        "typing",
+        "config",
+        "core",
+        "jobs.job_queue",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "stitching/__init__.py",
+      "lines": 4,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "ffmpeg_wrapper",
+        "service"
+      ]
+    },
+    {
+      "path": "stitching/ffmpeg_wrapper.py",
+      "lines": 132,
+      "classes": [
+        {
+          "name": "FFmpegService",
+          "methods": [
+            "VerifyFFmpeg",
+            "BuildConcatList",
+            "Stitch",
+            "ExtractThumbnail",
+            "GeneratePreview",
+            "ProbeVideo"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "shutil",
+        "subprocess",
+        "pathlib",
+        "typing",
+        "config",
+        "core"
+      ]
+    },
+    {
+      "path": "stitching/service.py",
+      "lines": 226,
+      "classes": [
+        {
+          "name": "StitchingResult",
+          "methods": [
+            "to_dict"
+          ]
+        },
+        {
+          "name": "VideoStitcher",
+          "methods": [
+            "run"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "dataclasses",
+        "datetime",
+        "pathlib",
+        "typing",
+        "config",
+        "core",
+        "jobs.job",
+        "jobs.job_queue",
+        "logging_system",
+        "stitching.ffmpeg_wrapper"
+      ]
+    },
+    {
+      "path": "storage/__init__.py",
+      "lines": 3,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "local_storage"
+      ]
+    },
+    {
+      "path": "storage/local_storage.py",
+      "lines": 74,
+      "classes": [
+        {
+          "name": "LocalStorage",
+          "methods": [
+            "get_temp_path",
+            "get_output_path",
+            "verify_file",
+            "cleanup_temp"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "pathlib",
+        "typing",
+        "core",
+        "utils",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "tests/test_cache_and_stitching.py",
+      "lines": 152,
+      "classes": [
+        {
+          "name": "_FakeJobQueue",
+          "methods": []
+        },
+        {
+          "name": "_FakeFFmpegService",
+          "methods": [
+            "VerifyFFmpeg",
+            "BuildConcatList",
+            "Stitch",
+            "ExtractThumbnail",
+            "GeneratePreview",
+            "ProbeVideo"
+          ]
+        },
+        {
+          "name": "CacheAndStitchingTests",
+          "methods": [
+            "test_render_cache_registers_and_validates_entry",
+            "test_video_stitcher_uses_manifest_order_and_generates_outputs"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "tempfile",
+        "unittest",
+        "pathlib",
+        "cache_system",
+        "config",
+        "core",
+        "jobs.job",
+        "stitching.service"
+      ]
+    },
+    {
+      "path": "tests/test_config_loader.py",
+      "lines": 59,
+      "classes": [
+        {
+          "name": "ConfigLoaderTests",
+          "methods": [
+            "test_precedence_orders_overrides_correctly"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "tempfile",
+        "unittest",
+        "pathlib",
+        "config.loader"
+      ]
+    },
+    {
+      "path": "tests/test_drive_sync_engine.py",
+      "lines": 146,
+      "classes": [
+        {
+          "name": "_FakeJobQueue",
+          "methods": [
+            "get_job",
+            "update_job"
+          ]
+        },
+        {
+          "name": "_FakeDriveClient",
+          "methods": [
+            "connect",
+            "ensure_project_structure",
+            "find_file_by_name",
+            "upload_file",
+            "verify_upload",
+            "list_directory",
+            "get_metadata",
+            "create_folder",
+            "download_file",
+            "delete_remote_file"
+          ]
+        },
+        {
+          "name": "DriveSyncEngineTests",
+          "methods": [
+            "setUp",
+            "tearDown",
+            "test_duplicate_upload_is_skipped",
+            "test_successful_upload_marks_job_complete"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "tempfile",
+        "unittest",
+        "pathlib",
+        "config",
+        "core",
+        "drive.sync_engine",
+        "jobs.job"
+      ]
+    },
+    {
+      "path": "tests/test_ltx_renderer.py",
+      "lines": 192,
+      "classes": [
+        {
+          "name": "_FakePipeline",
+          "methods": [
+            "to",
+            "enable_attention_slicing",
+            "enable_vae_slicing",
+            "enable_vae_tiling"
+          ]
+        },
+        {
+          "name": "LTXVideoRendererTests",
+          "methods": [
+            "setUp",
+            "tearDown",
+            "test_initialize_creates_reusable_session_info",
+            "test_validate_parameters_rejects_missing_input",
+            "test_image_preprocessing_converts_and_resizes",
+            "test_generate_clip_returns_structured_success_result",
+            "test_generate_clip_maps_oom_to_renderer_result",
+            "test_output_validation_checks_resolution_and_duration",
+            "test_cleanup_releases_pipeline"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "sys",
+        "tempfile",
+        "types",
+        "unittest",
+        "pathlib",
+        "unittest.mock",
+        "numpy",
+        "PIL",
+        "config",
+        "core",
+        "renderers.ltx_renderer"
+      ]
+    },
+    {
+      "path": "tests/test_observability_reporting.py",
+      "lines": 98,
+      "classes": [
+        {
+          "name": "_FakeJobQueue",
+          "methods": [
+            "get_jobs_by_status"
+          ]
+        },
+        {
+          "name": "ObservabilityReportingTests",
+          "methods": [
+            "test_runtime_monitor_writes_heartbeat",
+            "test_report_generator_saves_artifacts_and_benchmark_history"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "tempfile",
+        "unittest",
+        "pathlib",
+        "config",
+        "core",
+        "jobs.job",
+        "observability.runtime",
+        "reports.report_generator"
+      ]
+    },
+    {
+      "path": "tests/test_renderer_factory.py",
+      "lines": 40,
+      "classes": [
+        {
+          "name": "RendererFactoryTests",
+          "methods": [
+            "test_auto_uses_diffusers_when_wan2gp_dir_missing",
+            "test_auto_uses_wan2gp_when_runtime_dir_exists",
+            "test_explicit_backend_selection_is_honored",
+            "test_plugin_registry_exposes_known_backends"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "tempfile",
+        "unittest",
+        "pathlib",
+        "config",
+        "renderers.factory",
+        "renderers.ltx_renderer",
+        "renderers.wan2gp_ltx_renderer"
+      ]
+    },
+    {
+      "path": "tests/test_stress_and_benchmarking.py",
+      "lines": 83,
+      "classes": [
+        {
+          "name": "_FakeJobQueue",
+          "methods": [
+            "get_jobs_by_status"
+          ]
+        },
+        {
+          "name": "StressAndBenchmarkingTests",
+          "methods": [
+            "test_report_generator_handles_large_job_sets",
+            "test_benchmark_comparator_reports_delta"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "tempfile",
+        "unittest",
+        "pathlib",
+        "benchmarking",
+        "config",
+        "core",
+        "jobs.job",
+        "observability.runtime",
+        "reports.report_generator"
+      ]
+    },
+    {
+      "path": "tests/test_wan2gp_renderer.py",
+      "lines": 174,
+      "classes": [
+        {
+          "name": "_FakeFamilyHandler",
+          "methods": []
+        },
+        {
+          "name": "Wan2GPLTXRendererTests",
+          "methods": [
+            "setUp",
+            "tearDown",
+            "test_initialize_loads_wan2gp_runtime",
+            "test_generate_clip_uses_wan2gp_generation_path"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "sys",
+        "tempfile",
+        "types",
+        "unittest",
+        "pathlib",
+        "unittest.mock",
+        "PIL",
+        "config",
+        "core",
+        "renderers.wan2gp_ltx_renderer"
+      ]
+    },
+    {
+      "path": "utils/__init__.py",
+      "lines": 20,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "helpers",
+        "decorators"
+      ]
+    },
+    {
+      "path": "utils/decorators.py",
+      "lines": 55,
+      "classes": [],
+      "functions": [
+        "retry",
+        "log_execution_time"
+      ],
+      "imports": [
+        "time",
+        "functools",
+        "typing",
+        "core",
+        "logging_system"
+      ]
+    },
+    {
+      "path": "utils/helpers.py",
+      "lines": 81,
+      "classes": [
+        {
+          "name": "Timer",
+          "methods": []
+        }
+      ],
+      "functions": [
+        "generate_job_id",
+        "compute_file_hash",
+        "stable_hash",
+        "safe_remove",
+        "safe_mkdir"
+      ],
+      "imports": [
+        "hashlib",
+        "json",
+        "shutil",
+        "time",
+        "pathlib",
+        "typing",
+        "functools",
+        "core"
+      ]
+    },
+    {
+      "path": "validation/__init__.py",
+      "lines": 41,
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "models",
+        "validators"
+      ]
+    },
+    {
+      "path": "validation/models.py",
+      "lines": 66,
+      "classes": [
+        {
+          "name": "ValidationSeverity",
+          "methods": []
+        },
+        {
+          "name": "ValidationFinding",
+          "methods": []
+        },
+        {
+          "name": "ValidationReport",
+          "methods": [
+            "has_blocking_failures",
+            "has_failures",
+            "has_warnings",
+            "to_dict"
+          ]
+        }
+      ],
+      "functions": [],
+      "imports": [
+        "dataclasses",
+        "enum",
+        "typing"
+      ]
+    },
+    {
+      "path": "validation/validators.py",
+      "lines": 891,
+      "classes": [
+        {
+          "name": "BaseValidator",
+          "methods": [
+            "run",
+            "validate"
+          ]
+        },
+        {
+          "name": "ConfigValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "EnvironmentValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "DependencyValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "GPUValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "DiskValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "ManifestValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "OutputValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "CSVValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "ImageValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "DriveValidator",
+          "methods": [
+            "validate"
+          ]
+        },
+        {
+          "name": "ModelAssetValidator",
+          "methods": [
+            "validate"
+          ]
+        }
+      ],
+      "functions": [
+        "_resolve_image_path",
+        "_load_csv_rows",
+        "validate_config",
+        "validate_csv_schema",
+        "validate_image",
+        "validate_job_data"
+      ],
+      "imports": [
+        "csv",
+        "json",
+        "shutil",
+        "subprocess",
+        "sys",
+        "time",
+        "abc",
+        "datetime",
+        "pathlib",
+        "typing",
+        "PIL",
+        "config",
+        "config.profiles",
+        "core",
+        "logging_system",
+        "renderers.factory",
+        "validation.models"
+      ]
+    }
+  ],
+  "class_count": 93,
+  "function_count": 58,
+  "python_file_count": 66
+}

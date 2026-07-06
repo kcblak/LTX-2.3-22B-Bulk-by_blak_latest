@@ -1,0 +1,132 @@
+# Default configuration for LTX Bulk Renderer
+paths:
+  jobs_csv_path: "jobs.csv"
+  reference_images_dir: "."
+  output_dir: "outputs"
+  log_dir: "logs"
+  temp_dir: "temp"
+  manifest_path: "outputs/manifest.json"
+  report_path: "outputs/report.json"
+  cache_dir: "outputs/cache"
+  cache_index_path: "outputs/cache/render_cache.json"
+  stitched_output_path: "outputs/stitched/final_movie.mp4"
+  thumbnail_path: "outputs/previews/thumbnail.jpg"
+  preview_480p_path: "outputs/previews/preview_480p.mp4"
+  preview_720p_path: "outputs/previews/preview_720p.mp4"
+
+model:
+  renderer_backend: "auto"
+  model_name: "Lightricks/LTX-Video-2.3-22B-Ref-Distilled-1.1"
+  guidance_scale: 3.0
+  num_inference_steps: 8
+  seed: -1
+  use_cuda: true
+  use_mps: false
+  precision: "bf16"
+  frame_rate: 24
+  output_codec: "libx264"
+  output_container: "mp4"
+  output_quality: 8
+  resolution_alignment: 32
+  expected_duration_tolerance_seconds: 0.35
+  min_output_size_bytes: 1024
+  warmup_enabled: true
+  warmup_steps: 1
+  warmup_num_frames: 9
+  enable_attention_slicing: false
+  enable_vae_slicing: false
+  enable_vae_tiling: false
+  enable_model_cpu_offload: false
+  enable_sequential_cpu_offload: false
+  enable_memory_efficient_attention: true
+  empty_cache_interval: 5
+  wan2gp_dir: "Wan2GP"
+  wan2gp_model_dir: null
+  wan2gp_transformer_filename: "ltx-2.3-22b-distilled-1.1-Q3_K_M.gguf"
+  wan2gp_text_encoder_dirname: "gemma-3-12b-it-qat-q4_0-unquantized"
+  wan2gp_text_encoder_filename: null
+  wan2gp_lora_filename: "LTX-2.3-Licon-MSR-V1.safetensors"
+  wan2gp_base_model_type: "ltx2_22B_msr"
+  wan2gp_pipeline_variant: "distilled"
+  wan2gp_msr_enabled: true
+  wan2gp_msr_frame_count: 41
+  wan2gp_mmgp_profile: 4
+  wan2gp_vae_tile_size: 256
+  wan2gp_guide_phases: 2
+  wan2gp_negative_prompt: ""
+  wan2gp_quantize_transformer: false
+  wan2gp_audio_enabled: false
+
+drive:
+  enable_drive_upload: true
+  drive_credentials_path: null
+  drive_folder_id: null
+  drive_project_name: "default_project"
+  drive_root_folder_name: "LTX_PROJECTS"
+  drive_verify_uploads: true
+  drive_upload_retries: 5
+  drive_retry_base_seconds: 2.0
+  drive_retry_max_seconds: 60.0
+  drive_request_spacing_seconds: 0.25
+  drive_max_parallel_uploads: 2
+  drive_cleanup_policy: "delete_temp_only"
+  drive_required_subfolders:
+    - "config"
+    - "input"
+    - "images"
+    - "clips"
+    - "stitched"
+    - "logs"
+    - "reports"
+    - "manifests"
+    - "thumbnails"
+    - "previews"
+    - "cache"
+
+pipeline:
+  resume_enabled: true
+  enable_stitching: false
+  stitch_require_contiguous_success: true
+  stitch_upload_outputs: true
+  stitching_thumbnail_timestamp_seconds: 1
+  generate_preview_480p: true
+  generate_preview_720p: false
+  generate_compressed_preview: false
+  cache_enabled: true
+  max_retries: 3
+  parallel_uploads: true
+  cleanup_temp: true
+  auto_verify: true
+  preflight_enabled: true
+  preflight_abort_on_warning: false
+  diagnostics_network_check: false
+  benchmark_mode: false
+  benchmark_max_jobs: 0
+  benchmark_compare_previous: true
+
+logging:
+  log_level: "INFO"
+  log_performance: true
+  log_to_console: true
+  log_rotation_max_bytes: 10485760
+  log_rotation_backup_count: 5
+  log_rotation_max_age_days: 7
+  log_rotation_compress: true
+
+observability:
+  heartbeat_enabled: true
+  heartbeat_interval_seconds: 60
+  health_poll_interval_seconds: 30
+  sync_heartbeat_to_drive: true
+
+reports:
+  heartbeat_path: "outputs/heartbeat.json"
+  diagnostics_path: "outputs/diagnostics.json"
+  validation_report_path: "outputs/validation_report.json"
+  performance_report_path: "outputs/performance.json"
+  summary_path: "outputs/summary.txt"
+  project_report_csv_path: "outputs/project_report.csv"
+  benchmark_history_path: "outputs/benchmark_history.json"
+  benchmark_json_path: "outputs/benchmark.json"
+  benchmark_csv_path: "outputs/benchmark.csv"
+  performance_summary_path: "outputs/performance_summary.txt"

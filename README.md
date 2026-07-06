@@ -1,47 +1,25 @@
-# LTX Video Bulk Renderer
+﻿# LTX Bulk Renderer
 
-A production-grade, unattended bulk image-to-video rendering system optimized for Kaggle GPUs.
+Production-grade unattended batch image-to-video rendering for Kaggle GPU workers with Google Drive as persistent storage.
 
-## Features
+## Highlights
+- Layered configuration with defaults, YAML, environment variables, CLI overrides, and runtime overrides.
+- Structured validation, diagnostics, preflight analysis, runtime health monitoring, and benchmark reporting.
+- Plugin-based renderer backends for `diffusers` and `wan2gp`.
+- Background Google Drive synchronization with verification, retries, and resumable manifests.
+- Manifest-driven FFmpeg stitching, thumbnail extraction, preview generation, and benchmark artifact export.
+- Persistent verified render cache for duplicate work reuse.
 
-- **Unattended Execution**: Run and leave, no manual supervision needed
-- **Automatic Resumption**: Picks up where it left off if interrupted
-- **Google Drive Integration**: Automatically uploads generated clips
-- **Parallel Uploads**: Keep GPU busy while uploads happen in background
-- **Manifest & Reports**: Tracks all jobs with detailed reports
-- **Modular Architecture**: Clean, maintainable, extensible design
-
-## Project Structure
-
-```
-.
-├── src/
-│   ├── core/               # Core data models and job management
-│   ├── services/           # Model service and Google Drive service
-│   ├── workers/            # Pipeline orchestrator
-│   ├── storage/            # Local storage management
-│   ├── reporting/          # Reporting and manifest generation
-│   └── utils/              # Logging and utilities
-├── main.py                 # Entry point
-├── requirements.txt        # Python dependencies
-└── jobs.csv                # Jobs configuration
-```
-
-## Usage
-
-### On Kaggle
-
-1. Upload your `jobs.csv` and reference images as a dataset
-2. Use the provided Kaggle notebook to run the renderer
-3. Come back later to find all videos uploaded to your Google Drive
-
-### Local Execution
-
+## Quick Start
 ```bash
+python -m venv .venv
+. .venv/Scripts/Activate.ps1
 pip install -r requirements.txt
-python main.py --jobs-csv jobs.csv --reference-images path/to/images
+python main.py --project-config examples/config/project.yaml --preflight-only
+python main.py --project-config examples/config/project.yaml
 ```
 
-## Configuration
-
-All configuration is done via command-line arguments to `main.py`.
+## Standalone Diagnostics
+```bash
+python diagnose.py --project-config examples/config/project.yaml --network-check
+```
