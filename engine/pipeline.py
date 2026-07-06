@@ -45,7 +45,7 @@ class Pipeline:
         )
         self.reporter = ReportGenerator(config, self.job_queue, self.runtime_monitor)
 
-    def run(self) -> None:
+    def run(self) -> dict:
         logger.info("Starting pipeline...", extra={"job_id": "N/A"})
         pipeline_failed = False
         if self.runtime_monitor is not None:
@@ -146,7 +146,6 @@ class Pipeline:
                 self.runtime_monitor.set_current_job(None)
                 self.runtime_monitor.stop()
                 self.config.extra["runtime_monitor"] = self.runtime_monitor.export()
-            self.reporter.save_all()
             if self.config.enable_stitching:
                 stitcher = VideoStitcher(
                     self.config,
@@ -164,6 +163,7 @@ class Pipeline:
                         self.sync_engine.sync_artifact(self.config.preview_480p_path, "previews")
                     if self.config.preview_720p_path.exists():
                         self.sync_engine.sync_artifact(self.config.preview_720p_path, "previews")
+            summary = self.reporter.save_all()
             if self.sync_engine is not None:
                 self.sync_engine.sync_artifact(self.config.manifest_path, "manifests")
                 self.sync_engine.sync_artifact(self.config.report_path, "reports")
@@ -189,7 +189,6 @@ class Pipeline:
                 if self.config.project_config_path and self.config.project_config_path.exists():
                     self.sync_engine.sync_artifact(self.config.project_config_path, "config")
 
-        summary = self.reporter.generate_summary()
         logger.info("Pipeline complete!", extra={"job_id": "N/A"})
         logger.info("Final Summary:", extra={"job_id": "N/A"})
         for key, val in summary["summary"].items():
@@ -202,6 +201,7 @@ class Pipeline:
                 run_id=self.config.run_id,
                 summary=summary["summary"],
             )
+        return summary
 
     def _process_job(self, job) -> None:
         job_id = job.job_id

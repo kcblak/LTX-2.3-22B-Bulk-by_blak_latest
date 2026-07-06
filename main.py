@@ -10,15 +10,9 @@ import sys
 from typing import Any
 from pathlib import Path
 
-from bootstrap import bootstrap
 from config import load_config
 from core import APP_VERSION
-from diagnostics import DiagnosticsRunner
-from engine.pipeline import Pipeline
-from logging_system import get_logger, setup_logging
-from observability import EventBus, RuntimeMonitor
-from observability.failures import classify_exception
-from preflight import PreflightAnalyzer
+from orchestration.runner import ApplicationRunner
 from renderers.factory import get_available_renderer_backends
 
 
@@ -318,59 +312,9 @@ def main() -> int:
         print(f"Configuration failed: {exc}", file=sys.stderr)
         return 1
 
-    setup_logging(config)
-    logger = get_logger("main")
-    logger.info("=" * 80, extra={"job_id": "N/A"})
-    logger.info("LTX VIDEO BULK RENDERER", extra={"job_id": "N/A"})
-    logger.info("=" * 80, extra={"job_id": "N/A"})
-
-    event_bus = EventBus()
-    runtime_monitor = RuntimeMonitor(config)
-    diagnostics_runner = DiagnosticsRunner(config)
-    preflight = PreflightAnalyzer(config)
-
-    try:
-        diagnostics_result = diagnostics_runner.run()
-        diagnostics_runner.save(diagnostics_result, config.diagnostics_path)
-
-        bootstrap(config)
-
-        preflight_result = preflight.analyze()
-        preflight.save(preflight_result, config.validation_report_path)
-        config.extra["validation_report"] = preflight_result.to_dict()
-        logger.info(
-            "\n" + preflight.build_console_summary(preflight_result),
-            extra={"job_id": "N/A"},
-        )
-        if preflight_result.blocking_failures:
-            raise RuntimeError(
-                "Preflight failed with blocking issues. "
-                "See validation_report.json for details."
-            )
-        if config.preflight_abort_on_warning and preflight_result.warnings:
-            raise RuntimeError(
-                "Preflight warnings are configured to abort the run. "
-                "See validation_report.json for details."
-            )
-        if args.preflight_only:
-            logger.info("Preflight-only mode complete", extra={"job_id": "N/A"})
-            return 0
-
-        pipeline = Pipeline(config, event_bus=event_bus, runtime_monitor=runtime_monitor)
-        pipeline.run()
-
-        logger.info("=" * 80, extra={"job_id": "N/A"})
-        logger.info("SUCCESS: All jobs processed!", extra={"job_id": "N/A"})
-        logger.info("=" * 80, extra={"job_id": "N/A"})
-        return 0
-    except Exception as e:
-        failure = classify_exception(e)
-        logger.critical(f"FAILED: {e}", extra={"job_id": "N/A"}, exc_info=True)
-        logger.critical(
-            f"Failure category={failure.category} recommendation={failure.recommendation}",
-            extra={"job_id": "N/A"},
-        )
-        return 1
+    runner = ApplicationRunner(config)
+    result = runner.run(preflight_only=args.preflight_only)
+    return result.exit_code
 
 
 if __name__ == "__main__":

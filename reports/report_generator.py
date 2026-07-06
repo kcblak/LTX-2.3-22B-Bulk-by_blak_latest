@@ -159,14 +159,18 @@ class ReportGenerator(IReporter):
         }
         return summary
 
-    def save_json_report(self, path: Path) -> None:
-        report = self.generate_summary()
+    @staticmethod
+    def _write_json(path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def save_json_report(self, path: Path, summary: Optional[Dict[str, Any]] = None) -> None:
+        report = summary or self.generate_summary()
+        self._write_json(path, report)
         logger.info("JSON report saved", extra={"job_id": "N/A"})
 
-    def save_text_report(self, path: Path) -> None:
-        summary = self.generate_summary()
+    def save_text_report(self, path: Path, summary: Optional[Dict[str, Any]] = None) -> None:
+        summary = summary or self.generate_summary()
         lines = [
             "=" * 80,
             "LTX VIDEO BULK RENDERER - EXECUTION REPORT",
@@ -229,20 +233,30 @@ class ReportGenerator(IReporter):
                 )
         logger.info("CSV report saved", extra={"job_id": "N/A"})
 
-    def save_performance_report(self, path: Path) -> None:
-        data = self.generate_summary()["performance"]
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    def save_performance_report(
+        self,
+        path: Path,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        data = (summary or self.generate_summary())["performance"]
+        self._write_json(path, data)
         logger.info("Performance report saved", extra={"job_id": "N/A"})
 
-    def save_benchmark_json(self, path: Path) -> None:
-        data = self.generate_summary()["benchmark"]
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    def save_benchmark_json(
+        self,
+        path: Path,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        data = (summary or self.generate_summary())["benchmark"]
+        self._write_json(path, data)
         logger.info("Benchmark JSON saved", extra={"job_id": "N/A"})
 
-    def save_benchmark_csv(self, path: Path) -> None:
-        benchmark = self.generate_summary()["benchmark"]
+    def save_benchmark_csv(
+        self,
+        path: Path,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        benchmark = (summary or self.generate_summary())["benchmark"]
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(
@@ -272,8 +286,12 @@ class ReportGenerator(IReporter):
             )
         logger.info("Benchmark CSV saved", extra={"job_id": "N/A"})
 
-    def save_performance_summary(self, path: Path) -> None:
-        summary = self.generate_summary()
+    def save_performance_summary(
+        self,
+        path: Path,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        summary = summary or self.generate_summary()
         perf = summary["performance"]
         benchmark = summary["benchmark"]
         lines = [
@@ -294,28 +312,27 @@ class ReportGenerator(IReporter):
 
     def save_validation_report(self, path: Path) -> None:
         data = self.config.extra.get("validation_report", {})
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        self._write_json(path, data)
         logger.info("Validation report saved", extra={"job_id": "N/A"})
 
     def save_diagnostics_report(self, path: Path) -> None:
         data = self.config.extra.get("diagnostics", {})
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        self._write_json(path, data)
         logger.info("Diagnostics report saved", extra={"job_id": "N/A"})
 
-    def save_all(self) -> None:
+    def save_all(self) -> Dict[str, Any]:
         summary = self.generate_summary()
-        self.save_json_report(self.config.report_path)
-        self.save_text_report(self.config.summary_path)
+        self.save_json_report(self.config.report_path, summary)
+        self.save_text_report(self.config.summary_path, summary)
         self.save_csv_report(self.config.project_report_csv_path)
-        self.save_performance_report(self.config.performance_report_path)
-        self.save_benchmark_json(self.config.benchmark_json_path)
-        self.save_benchmark_csv(self.config.benchmark_csv_path)
-        self.save_performance_summary(self.config.performance_summary_path)
+        self.save_performance_report(self.config.performance_report_path, summary)
+        self.save_benchmark_json(self.config.benchmark_json_path, summary)
+        self.save_benchmark_csv(self.config.benchmark_csv_path, summary)
+        self.save_performance_summary(self.config.performance_summary_path, summary)
         self.save_validation_report(self.config.validation_report_path)
         self.save_diagnostics_report(self.config.diagnostics_path)
         self._update_benchmark_history(summary["benchmark"])
+        return summary
 
     def _update_benchmark_history(self, benchmark_section: dict[str, Any]) -> None:
         if not self.config.benchmark_mode:

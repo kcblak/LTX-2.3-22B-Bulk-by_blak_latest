@@ -1,4 +1,5 @@
 import json
+import subprocess
 import threading
 import time
 from collections import deque
@@ -38,6 +39,8 @@ class RuntimeMonitor:
         self._job_queue = None
         self._last_snapshot: Optional[dict[str, Any]] = None
         self._last_heartbeat_time = 0.0
+        self._started_at = datetime.now().isoformat()
+        self._started_monotonic = time.monotonic()
 
     def attach(self, *, job_queue=None, heartbeat_remote_sync=None) -> None:
         self._job_queue = job_queue
@@ -102,7 +105,9 @@ class RuntimeMonitor:
     def get_snapshot(self) -> dict[str, Any]:
         with self._lock:
             pending_jobs = 0
+            total_jobs = 0
             if self._job_queue is not None:
+                total_jobs = len(self._job_queue.jobs)
                 pending_jobs = len(
                     [
                         job
@@ -110,15 +115,31 @@ class RuntimeMonitor:
                         if job.status.name not in FINAL_JOB_STATUSES
                     ]
                 )
+            elapsed_seconds = max(0.0, time.monotonic() - self._started_monotonic)
+            throughput_jobs_per_hour = (
+                (self._completed_jobs / elapsed_seconds) * 3600.0
+                if elapsed_seconds > 0 and self._completed_jobs > 0
+                else 0.0
+            )
+            eta_seconds = (
+                (pending_jobs / self._completed_jobs) * elapsed_seconds
+                if pending_jobs > 0 and self._completed_jobs > 0
+                else None
+            )
             snapshot = {
                 "project_id": self.config.project_id,
                 "run_id": self.config.run_id,
+                "started_at": self._started_at,
                 "status": self._status,
                 "current_job": self._current_job_id,
+                "total_jobs": total_jobs,
                 "completed_jobs": self._completed_jobs,
                 "failed_jobs": self._failed_jobs,
                 "remaining_jobs": pending_jobs,
                 "upload_queue": self._upload_queue_length,
+                "elapsed_seconds": round(elapsed_seconds, 2),
+                "throughput_jobs_per_hour": round(throughput_jobs_per_hour, 2),
+                "eta_seconds": round(eta_seconds, 2) if eta_seconds is not None else None,
                 "average_render_time_seconds": (
                     sum(self._render_times) / len(self._render_times)
                     if self._render_times
@@ -138,8 +159,11 @@ class RuntimeMonitor:
     def _sample_system_metrics(self) -> dict[str, Any]:
         data: dict[str, Any] = {
             "cpu_percent": None,
+            "ram_total_mb": None,
             "ram_used_mb": None,
+            "gpu_utilization_percent": None,
             "vram_used_mb": None,
+            "vram_total_mb": None,
             "gpu": None,
         }
         try:
@@ -147,6 +171,7 @@ class RuntimeMonitor:
 
             data["cpu_percent"] = psutil.cpu_percent(interval=None)
             memory = psutil.virtual_memory()
+            data["ram_total_mb"] = round(memory.total / (1024**2), 2)
             data["ram_used_mb"] = round(memory.used / (1024**2), 2)
         except Exception:
             pass
@@ -158,7 +183,30 @@ class RuntimeMonitor:
                 reserved = torch.cuda.memory_reserved(0)
                 props = torch.cuda.get_device_properties(0)
                 data["vram_used_mb"] = round(max(allocated, reserved) / (1024**2), 2)
+                data["vram_total_mb"] = round(props.total_memory / (1024**2), 2)
                 data["gpu"] = props.name
+        except Exception:
+            pass
+        try:
+            result = subprocess.run(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=utilization.gpu,memory.used,memory.total,name",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                check=True,
+                text=True,
+                timeout=2,
+            )
+            first_line = result.stdout.strip().splitlines()[0]
+            utilization, memory_used, memory_total, name = [
+                part.strip() for part in first_line.split(",", 3)
+            ]
+            data["gpu_utilization_percent"] = float(utilization)
+            data["vram_used_mb"] = float(memory_used)
+            data["vram_total_mb"] = float(memory_total)
+            data["gpu"] = name
         except Exception:
             pass
         return data
