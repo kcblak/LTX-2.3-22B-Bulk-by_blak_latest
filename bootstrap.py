@@ -22,14 +22,20 @@ def check_dependencies(config: Config) -> None:
     report = verify_runtime_dependencies(config)
     if report.missing_required:
         raise BootstrapError(
-            "Missing required dependencies: " + ", ".join(report.missing_required)
+            "Missing required dependencies for "
+            f"profile={report.profile_name} renderer={report.renderer_backend or 'unknown'}: "
+            + ", ".join(report.missing_required)
         )
     failed_features = [
         status for status in report.feature_statuses if status.enabled and status.required and status.state == "FAILED"
     ]
     if failed_features:
         messages = [f"{status.feature_key}: {status.reason}" for status in failed_features]
-        raise BootstrapError("Runtime dependency verification failed: " + "; ".join(messages))
+        raise BootstrapError(
+            "Runtime dependency verification failed for "
+            f"profile={report.profile_name} renderer={report.renderer_backend or 'unknown'}: "
+            + "; ".join(messages)
+        )
 
 
 def check_disk_space() -> None:
@@ -40,6 +46,8 @@ def check_disk_space() -> None:
         free_gb = usage.free / (1024**3)
         if free_gb < 10:
             raise BootstrapError(f"Insufficient disk space (only {free_gb:.2f}GB free, need at least 10GB)")
+    except BootstrapError:
+        raise
     except Exception as e:
         logger.warning(f"Could not check disk space: {e}", extra={"job_id": "N/A"})
 

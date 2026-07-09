@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -92,6 +93,15 @@ class PipInstallResult:
     stdout: str = ""
     stderr: str = ""
     reason: str = ""
+    requested_version: str = ""
+    installed_version_before: str = ""
+    installed_version_after: str = ""
+    platform_name: str = ""
+    python_version: str = ""
+    cuda_version: str = ""
+    duration_seconds: float = 0.0
+    suggested_resolution: str = ""
+    command: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -508,17 +518,7 @@ _EXECUTION_PROFILES: dict[str, dict[str, bool]] = {
         "image_editing": True,
         "gradio_ui": True,
     },
-    "workstation": {
-        "core_renderer": True,
-        "csv_batch_rendering": True,
-        "resume_engine": True,
-        "video_stitching": True,
-        "reporting": True,
-        "google_drive_integration": True,
-        "image_editing": True,
-        "gradio_ui": True,
-    },
-    "production_server": {
+    "production": {
         "core_renderer": True,
         "csv_batch_rendering": True,
         "resume_engine": True,
@@ -530,6 +530,22 @@ _EXECUTION_PROFILES: dict[str, dict[str, bool]] = {
         "msr_models": True,
         "diffusers_backend": False,
     },
+    "testing": {
+        "core_renderer": True,
+        "csv_batch_rendering": True,
+        "resume_engine": True,
+        "video_stitching": False,
+        "reporting": True,
+        "google_drive_integration": False,
+        "development_tools": False,
+        "testing_tools": True,
+        "gradio_ui": False,
+    },
+}
+
+_EXECUTION_PROFILE_ALIASES: dict[str, str] = {
+    "production_server": "production",
+    "workstation": "local_development",
 }
 
 _FEATURE_CATALOG: dict[str, FeatureSpec] = {
@@ -767,11 +783,16 @@ def _build_profile_specs(
     return [_DEPENDENCY_CATALOG[key] for key in keys]
 
 
+def _resolve_execution_profile_name(profile_name: str) -> str:
+    normalized = profile_name.strip().lower()
+    return _EXECUTION_PROFILE_ALIASES.get(normalized, normalized)
+
+
 def detect_execution_profile(config: Config) -> str:
-    requested = (config.execution_profile or "").strip().lower()
+    requested = _resolve_execution_profile_name(config.execution_profile or "")
     if requested and requested != "auto":
         return requested
-    return "kaggle_bulk" if _is_kaggle_runtime() else "workstation"
+    return "kaggle_bulk" if _is_kaggle_runtime() else "production"
 
 
 def _resolve_feature_overrides(config: Config) -> dict[str, bool]:
@@ -838,6 +859,116 @@ def _package_feature_map(enabled_features: list[str]) -> dict[str, list[str]]:
 
 def _python_version_tuple() -> tuple[int, int]:
     return sys.version_info[:2]
+
+
+def _python_version_string() -> str:
+    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+
+def _parse_requested_version(requirement: str) -> str:
+    match = re.search(r"(==|>=|<=|~=|>|<)\s*([^;,\s]+)", requirement)
+    return match.group(2) if match else ""
+
+
+def _detect_torch_cuda_version() -> tuple[str, str]:
+    try:
+        import torch
+
+        return getattr(torch, "__version__", ""), torch.version.cuda or ""
+    except Exception:
+        return "", ""
+
+
+def _find_dependency_spec(package_name: str) -> Optional[DependencySpec]:
+    normalized = _normalize_package_name(package_name)
+    for spec in _DEPENDENCY_CATALOG.values():
+        if _normalize_package_name(spec.package_name) == normalized:
+            return spec
+    return None
+
+
+def _suggest_dependency_resolution(
+    spec: Optional[DependencySpec],
+    *,
+    optional: bool,
+    platform_name: str,
+    kaggle_mode: bool,
+    reason: str,
+) -> str:
+    suggestions: list[str] = []
+    if "Unsupported on platform" in reason:
+        suggestions.append(
+            f"Use a profile compatible with {platform_name} or disable the feature that requested {spec.package_name if spec else 'this package'}."
+        )
+    if "Rejected by Kaggle compatibility filter" in reason:
+        suggestions.append("Disable the feature for Kaggle or rerun in a local/production environment.")
+    if "Experimental dependency" in reason:
+        suggestions.append("Enable dependency_allow_experimental only if the workload explicitly requires it.")
+    if "Development wheels are disabled" in reason:
+        suggestions.append("Enable dependency_allow_development_wheels only for controlled development environments.")
+    if "pip install failed" in reason:
+        suggestions.append("Inspect pip stdout/stderr, verify the version is available for the active Python/CUDA runtime, and retry.")
+    if kaggle_mode:
+        suggestions.append("Confirm the package has Linux wheels compatible with Kaggle Python 3.11.")
+    if optional:
+        suggestions.append("This is optional; the launcher can continue with the feature disabled.")
+    else:
+        suggestions.append("This dependency is required for the selected renderer/profile and must be resolved before launch.")
+    return " ".join(dict.fromkeys(suggestions))
+
+
+def _build_pip_install_result(
+    *,
+    requirement: str,
+    package_name: str,
+    classification: str,
+    feature_keys: list[str],
+    profile_name: str,
+    result: subprocess.CompletedProcess[str],
+    duration_seconds: float,
+    platform_name: str,
+    kaggle_mode: bool,
+    installed_version_before: str = "",
+    reason: str = "",
+) -> PipInstallResult:
+    spec = _find_dependency_spec(package_name)
+    installed_version_after = installed_version_before
+    if result.returncode == 0:
+        installed_version_after = _installed_distribution_versions().get(
+            _normalize_package_name(package_name),
+            installed_version_before,
+        )
+    _, cuda_version = _detect_torch_cuda_version()
+    optional = classification != "required"
+    resolved_reason = reason or ("" if result.returncode == 0 else "pip install failed")
+    return PipInstallResult(
+        requirement=requirement,
+        package_name=package_name,
+        classification=classification,
+        optional=optional,
+        feature_keys=list(feature_keys),
+        profile_name=profile_name,
+        success=result.returncode == 0,
+        exit_code=result.returncode,
+        stdout=result.stdout,
+        stderr=result.stderr,
+        reason=resolved_reason,
+        requested_version=_parse_requested_version(requirement),
+        installed_version_before=installed_version_before,
+        installed_version_after=installed_version_after,
+        platform_name=platform_name,
+        python_version=_python_version_string(),
+        cuda_version=cuda_version,
+        duration_seconds=round(duration_seconds, 2),
+        suggested_resolution=_suggest_dependency_resolution(
+            spec,
+            optional=optional,
+            platform_name=platform_name,
+            kaggle_mode=kaggle_mode,
+            reason=resolved_reason,
+        ),
+        command=[sys.executable, "-m", "pip", "install", requirement],
+    )
 
 
 def _classify_spec_for_runtime(
@@ -917,6 +1048,7 @@ def inspect_dependency_profile(
         profile_name=profile_name,
         platform_name=resolved_platform,
         kaggle_mode=resolved_kaggle,
+        python_version=_python_version_string(),
     )
 
     for spec in _build_profile_specs(profile_name, optional_features=optional_features):
@@ -950,6 +1082,17 @@ def inspect_dependency_profile(
                     success=False,
                     exit_code=0,
                     reason=reason,
+                    requested_version=_parse_requested_version(spec.requirement),
+                    platform_name=resolved_platform,
+                    python_version=_python_version_string(),
+                    cuda_version=_detect_torch_cuda_version()[1],
+                    suggested_resolution=_suggest_dependency_resolution(
+                        spec,
+                        optional=spec.optional,
+                        platform_name=resolved_platform,
+                        kaggle_mode=resolved_kaggle,
+                        reason=reason,
+                    ),
                 )
             )
             continue
@@ -998,23 +1141,23 @@ def ensure_dependency_profile(
     for status in report.statuses:
         if not status.selected or status.installed:
             continue
+        started = time.monotonic()
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", status.requirement],
             capture_output=True,
             text=True,
         )
-        pip_result = PipInstallResult(
+        pip_result = _build_pip_install_result(
             requirement=status.requirement,
             package_name=status.package_name,
             classification=status.classification,
-            optional=status.classification in {"optional", "experimental"},
             feature_keys=list(status.feature_keys),
             profile_name=profile_name,
-            success=result.returncode == 0,
-            exit_code=result.returncode,
-            stdout=result.stdout,
-            stderr=result.stderr,
-            reason="" if result.returncode == 0 else "pip install failed",
+            result=result,
+            duration_seconds=time.monotonic() - started,
+            platform_name=report.platform_name,
+            kaggle_mode=report.kaggle_mode,
+            installed_version_before=status.version,
         )
         if pip_result.success:
             report.installed_packages.append(pip_result)
@@ -1119,6 +1262,17 @@ def inspect_feature_dependency_profile(config: Config) -> DependencyProfileRepor
                     success=False,
                     exit_code=0,
                     reason=reason,
+                    requested_version=_parse_requested_version(spec.requirement),
+                    platform_name=platform_name,
+                    python_version=_python_version_string(),
+                    cuda_version=_detect_torch_cuda_version()[1],
+                    suggested_resolution=_suggest_dependency_resolution(
+                        spec,
+                        optional=not required,
+                        platform_name=platform_name,
+                        kaggle_mode=kaggle_mode,
+                        reason=reason,
+                    ),
                 )
             )
             continue
@@ -1215,6 +1369,12 @@ def verify_runtime_dependencies(config: Config) -> DependencyProfileReport:
 
     checks: list[DependencyVerificationCheck] = [
         DependencyVerificationCheck(
+            name="python",
+            success=sys.version_info >= (3, 11),
+            details=_python_version_string(),
+            feature_key="core_renderer",
+        ),
+        DependencyVerificationCheck(
             name="ffmpeg",
             success=shutil.which("ffmpeg") is not None,
             details=shutil.which("ffmpeg") or "ffmpeg not on PATH",
@@ -1271,12 +1431,30 @@ def verify_runtime_dependencies(config: Config) -> DependencyProfileReport:
                             feature_key="core_renderer",
                         )
                     )
+                    checks.append(
+                        DependencyVerificationCheck(
+                            name="gpu",
+                            success=bool(torch.cuda.is_available()),
+                            details=torch.cuda.get_device_name(0)
+                            if torch.cuda.is_available()
+                            else "GPU unavailable",
+                            feature_key="core_renderer",
+                        )
+                    )
                 else:
                     checks.append(
                         DependencyVerificationCheck(
                             name="cuda",
                             success=True,
                             details="CUDA not required by configuration",
+                            feature_key="core_renderer",
+                        )
+                    )
+                    checks.append(
+                        DependencyVerificationCheck(
+                            name="gpu",
+                            success=True,
+                            details="GPU not required by configuration",
                             feature_key="core_renderer",
                         )
                     )
@@ -1289,11 +1467,30 @@ def verify_runtime_dependencies(config: Config) -> DependencyProfileReport:
                         feature_key="core_renderer",
                     )
                 )
+                checks.append(
+                    DependencyVerificationCheck(
+                        name="gpu",
+                        success=not config.use_cuda,
+                        details=str(exc),
+                        feature_key="core_renderer",
+                    )
+                )
+            checks.append(
+                _module_check(
+                    "core_renderer",
+                    "renderers.factory",
+                    display_name="renderer_initialization",
+                )
+            )
         if feature_key == "wan2gp_runtime":
             checks.append(
                 DependencyVerificationCheck(
                     name="wan2gp",
-                    success=config.wan2gp_dir.exists(),
+                    success=config.wan2gp_dir.exists()
+                    and any(
+                        (config.wan2gp_dir / relative_path).exists()
+                        for relative_path in ("wan", "wan_generate_video.py", "ltx_video", "requirements.txt")
+                    ),
                     details=str(config.wan2gp_dir.resolve(strict=False)),
                     feature_key=feature_key,
                 )
@@ -1363,23 +1560,23 @@ def ensure_runtime_dependency_profile(config: Config) -> DependencyProfileReport
         for status in report.statuses:
             if not status.selected or status.installed:
                 continue
+            started = time.monotonic()
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", status.requirement],
                 capture_output=True,
                 text=True,
             )
-            pip_result = PipInstallResult(
+            pip_result = _build_pip_install_result(
                 requirement=status.requirement,
                 package_name=status.package_name,
                 classification=status.classification,
-                optional=status.classification != "required",
                 feature_keys=list(status.feature_keys),
                 profile_name=report.profile_name,
-                success=result.returncode == 0,
-                exit_code=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                reason="" if result.returncode == 0 else "pip install failed",
+                result=result,
+                duration_seconds=time.monotonic() - started,
+                platform_name=report.platform_name,
+                kaggle_mode=report.kaggle_mode,
+                installed_version_before=status.version,
             )
             if pip_result.success:
                 report.installed_packages.append(pip_result)
@@ -1420,6 +1617,10 @@ def ensure_git_checkout(destination: Path, repo_url: str, ref: str = "main") -> 
         )
         cloned = True
     elif (destination / ".git").exists():
+        _run_checked_command(
+            ["git", "-C", str(destination), "fetch", "--depth", "1", "origin", ref],
+            field_name="git fetch",
+        )
         try:
             _run_checked_command(
                 ["git", "-C", str(destination), "rev-parse", "--verify", ref],
@@ -1434,6 +1635,10 @@ def ensure_git_checkout(destination: Path, repo_url: str, ref: str = "main") -> 
                 ["git", "-C", str(destination), "checkout", "-b", ref, f"origin/{ref}"],
                 field_name="git checkout -b",
             )
+        _run_checked_command(
+            ["git", "-C", str(destination), "pull", "--ff-only", "origin", ref],
+            field_name="git pull",
+        )
         updated = True
 
     return GitCheckoutReport(

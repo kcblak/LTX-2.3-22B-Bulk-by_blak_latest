@@ -79,6 +79,8 @@ class RuntimeAssetTests(unittest.TestCase):
         failure = report.failed_required[0]
         self.assertEqual(failure.package_name, "PyYAML")
         self.assertIn("no matching distribution found", failure.stderr)
+        self.assertTrue(failure.suggested_resolution)
+        self.assertEqual(failure.python_version.count("."), 2)
 
     def test_config_exposes_wan2gp_runtime_asset_defaults(self):
         config = Config()
@@ -88,8 +90,12 @@ class RuntimeAssetTests(unittest.TestCase):
         self.assertTrue(config.wan2gp_required_text_encoder_files)
 
     def test_detect_execution_profile_uses_config_override(self):
+        config = Config(execution_profile="production")
+        self.assertEqual(detect_execution_profile(config), "production")
+
+    def test_detect_execution_profile_maps_legacy_alias(self):
         config = Config(execution_profile="production_server")
-        self.assertEqual(detect_execution_profile(config), "production_server")
+        self.assertEqual(detect_execution_profile(config), "production")
 
     def test_detect_renderer_dependency_profile_prefers_wan2gp_when_runtime_exists(self):
         with tempfile.TemporaryDirectory() as temp_dir:

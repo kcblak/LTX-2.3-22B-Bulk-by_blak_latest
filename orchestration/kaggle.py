@@ -9,11 +9,12 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from bootstrap import collect_environment_info
 from config import Config, load_config
@@ -119,7 +120,13 @@ class ProjectDiscovery:
     preset_paths: list[Path]
     project_name: str
     image_match_count: int
+    referenced_image_count: int = 0
+    missing_image_refs: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+
+    @property
+    def missing_image_count(self) -> int:
+        return len(self.missing_image_refs)
 
 
 @dataclass
@@ -141,6 +148,7 @@ class ResumeSummary:
     remaining_jobs: int
     skipped_jobs: int
     cache_entries: int
+    notes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -155,6 +163,143 @@ class NotebookLaunchContext:
     source_root: Path
     runtime_preparation: dict[str, Any] = field(default_factory=dict)
     preparation: Optional[PreparationResult] = None
+
+
+@dataclass
+class BootstrapSection:
+    name: str
+    status: str
+    message: str
+    details: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "status": self.status,
+            "message": self.message,
+            "details": list(self.details),
+            "suggestions": list(self.suggestions),
+        }
+
+
+@dataclass
+class StageExecutionReport:
+    stage_name: str
+    status: str
+    started_at: str
+    completed_at: str
+    duration_seconds: float
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+    suggestions: list[str] = field(default_factory=list)
+    error_type: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "stage_name": self.stage_name,
+            "status": self.status,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "duration_seconds": self.duration_seconds,
+            "message": self.message,
+            "details": dict(self.details),
+            "suggestions": list(self.suggestions),
+            "error_type": self.error_type,
+        }
+
+
+@dataclass
+class BootstrapReport:
+    stages: list[StageExecutionReport] = field(default_factory=list)
+    sections: dict[str, BootstrapSection] = field(default_factory=dict)
+    ready_to_launch: bool = False
+    summary_lines: list[str] = field(default_factory=list)
+
+    def stage_by_name(self) -> dict[str, StageExecutionReport]:
+        return {stage.stage_name: stage for stage in self.stages}
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ready_to_launch": self.ready_to_launch,
+            "summary_lines": list(self.summary_lines),
+            "stages": [stage.to_dict() for stage in self.stages],
+            "sections": {
+                section_name: section.to_dict()
+                for section_name, section in self.sections.items()
+            },
+        }
+
+
+@dataclass
+class LauncherExecutionState:
+    context: Optional[NotebookLaunchContext] = None
+    runtime_preparation: dict[str, Any] = field(default_factory=dict)
+    preparation: Optional[PreparationResult] = None
+    result: Optional[ApplicationRunResult] = None
+    bootstrap_report: BootstrapReport = field(default_factory=BootstrapReport)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "context": None
+            if self.context is None
+            else {
+                "repo_validation": {
+                    "ready": self.context.repo_validation.ready,
+                    "critical_missing": list(self.context.repo_validation.critical_missing),
+                    "optional_missing": list(self.context.repo_validation.optional_missing),
+                },
+                "discovery": {
+                    "jobs_csv_path": str(self.context.discovery.jobs_csv_path),
+                    "reference_images_dir": str(self.context.discovery.reference_images_dir),
+                    "project_config_path": (
+                        str(self.context.discovery.project_config_path)
+                        if self.context.discovery.project_config_path
+                        else None
+                    ),
+                    "preset_paths": [str(path) for path in self.context.discovery.preset_paths],
+                    "referenced_image_count": self.context.discovery.referenced_image_count,
+                    "image_match_count": self.context.discovery.image_match_count,
+                    "missing_image_refs": list(self.context.discovery.missing_image_refs),
+                    "notes": list(self.context.discovery.notes),
+                },
+                "drive_credentials": {
+                    "enabled": self.context.drive_credentials.enabled,
+                    "source": self.context.drive_credentials.source,
+                    "notes": list(self.context.drive_credentials.notes),
+                },
+                "resume_summary": {
+                    "manifest_path": (
+                        str(self.context.resume_summary.manifest_path)
+                        if self.context.resume_summary.manifest_path
+                        else None
+                    ),
+                    "cache_index_path": (
+                        str(self.context.resume_summary.cache_index_path)
+                        if self.context.resume_summary.cache_index_path
+                        else None
+                    ),
+                    "completed_jobs": self.context.resume_summary.completed_jobs,
+                    "remaining_jobs": self.context.resume_summary.remaining_jobs,
+                    "skipped_jobs": self.context.resume_summary.skipped_jobs,
+                    "cache_entries": self.context.resume_summary.cache_entries,
+                    "notes": list(self.context.resume_summary.notes),
+                },
+                "source_root": str(self.context.source_root),
+            },
+            "runtime_preparation": dict(self.runtime_preparation),
+            "preparation": None
+            if self.preparation is None
+            else {
+                "ready": self.preparation.ready,
+                "diagnostics": dict(self.preparation.diagnostics),
+                "preflight": dict(self.preparation.preflight),
+                "started_at": self.preparation.started_at,
+                "completed_at": self.preparation.completed_at,
+            },
+            "result": None if self.result is None else self.result.to_dict(),
+            "bootstrap_report": self.bootstrap_report.to_dict(),
+        }
 
 
 def _safe_version(package_name: str) -> str:
@@ -193,12 +338,42 @@ def _slugify(value: str) -> str:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Failed to parse JSON file {path}: {exc}") from exc
 
 
 def _read_csv_rows(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        return list(csv.DictReader(handle))
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+            return list(csv.DictReader(handle))
+    except Exception as exc:
+        raise RuntimeError(f"Failed to parse CSV file {path}: {exc}") from exc
+
+
+def _serialize_pip_result(result: Any) -> dict[str, Any]:
+    return {
+        "package": result.package_name,
+        "requirement": result.requirement,
+        "requested_version": getattr(result, "requested_version", ""),
+        "installed_version_before": getattr(result, "installed_version_before", ""),
+        "installed_version_after": getattr(result, "installed_version_after", ""),
+        "classification": result.classification,
+        "optional": result.optional,
+        "feature_keys": list(getattr(result, "feature_keys", [])),
+        "profile_name": result.profile_name,
+        "platform": getattr(result, "platform_name", ""),
+        "python_version": getattr(result, "python_version", ""),
+        "cuda_version": getattr(result, "cuda_version", ""),
+        "duration_seconds": getattr(result, "duration_seconds", 0.0),
+        "exit_code": result.exit_code,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "reason": result.reason,
+        "suggested_resolution": getattr(result, "suggested_resolution", ""),
+        "command": list(getattr(result, "command", [])),
+    }
 
 
 def inspect_runtime_dependencies(config: Optional[Config] = None) -> DependencyInspection:
@@ -267,9 +442,14 @@ def ensure_notebook_dependencies() -> DependencyInspection:
         failure = report.failed_required[0]
         raise RuntimeError(
             f"Bootstrap dependency install failed for {failure.package_name} "
-            f"(exit_code={failure.exit_code}).\n"
+            f"(requested={getattr(failure, 'requested_version', 'n/a') or 'n/a'}, "
+            f"installed_before={getattr(failure, 'installed_version_before', 'n/a') or 'n/a'}, "
+            f"python={getattr(failure, 'python_version', 'n/a') or 'n/a'}, "
+            f"cuda={getattr(failure, 'cuda_version', 'n/a') or 'n/a'}, "
+            f"exit_code={failure.exit_code}).\n"
             f"stdout:\n{failure.stdout or '<empty>'}\n"
-            f"stderr:\n{failure.stderr or '<empty>'}"
+            f"stderr:\n{failure.stderr or '<empty>'}\n"
+            f"suggested_resolution:\n{getattr(failure, 'suggested_resolution', 'Review pip diagnostics and retry.')}"
         )
     return inspect_runtime_dependencies()
 
@@ -347,7 +527,10 @@ def _score_reference_root(root: Path, image_refs: list[str]) -> int:
     return score
 
 
-def _discover_reference_root(jobs_csv_path: Path, input_root: Path) -> tuple[Path, int]:
+def _discover_reference_root(
+    jobs_csv_path: Path,
+    input_root: Path,
+) -> tuple[Path, int, list[str], int]:
     rows = _read_csv_rows(jobs_csv_path)
     image_refs: list[str] = []
     for row in rows:
@@ -355,9 +538,10 @@ def _discover_reference_root(jobs_csv_path: Path, input_root: Path) -> tuple[Pat
             value = (row.get(key) or "").strip()
             if value:
                 image_refs.append(value)
+    image_refs = list(dict.fromkeys(image_refs))
 
     if not image_refs:
-        return jobs_csv_path.parent, 0
+        return jobs_csv_path.parent, 0, [], 0
 
     candidate_roots: list[Path] = []
     current = jobs_csv_path.parent
@@ -374,7 +558,10 @@ def _discover_reference_root(jobs_csv_path: Path, input_root: Path) -> tuple[Pat
         if score > best_score:
             best_root = candidate_root
             best_score = score
-    return best_root, max(0, best_score)
+    missing_refs = sorted(
+        ref for ref in image_refs if ref and not (best_root / ref).exists()
+    )
+    return best_root, max(0, best_score), missing_refs, len(image_refs)
 
 
 def discover_kaggle_project(input_root: Path = Path("/kaggle/input")) -> ProjectDiscovery:
@@ -387,66 +574,82 @@ def discover_kaggle_project(input_root: Path = Path("/kaggle/input")) -> Project
         raise FileNotFoundError("No jobs.csv file was found under /kaggle/input")
 
     best_candidate: Optional[ProjectDiscovery] = None
+    candidate_errors: list[str] = []
     for jobs_csv_path in jobs_candidates:
-        reference_root, image_match_count = _discover_reference_root(jobs_csv_path, input_root)
-        project_config_path = _find_nearest_config(jobs_csv_path, input_root)
-        preset_paths = _find_nearest_presets(jobs_csv_path, input_root)
-        current = jobs_csv_path.parent
-        manifest_seed_path: Optional[Path] = None
-        cache_seed_path: Optional[Path] = None
-        while True:
-            manifest_candidate = current / "manifest.json"
-            cache_candidate = current / "render_cache.json"
-            if manifest_seed_path is None and manifest_candidate.exists():
-                manifest_seed_path = manifest_candidate
-            if cache_seed_path is None and cache_candidate.exists():
-                cache_seed_path = cache_candidate
-            outputs_manifest = current / "outputs" / "manifest.json"
-            outputs_cache = current / "outputs" / "cache" / "render_cache.json"
-            if manifest_seed_path is None and outputs_manifest.exists():
-                manifest_seed_path = outputs_manifest
-            if cache_seed_path is None and outputs_cache.exists():
-                cache_seed_path = outputs_cache
-            if current == input_root or current.parent == current:
-                break
-            current = current.parent
-
-        dataset_name = jobs_csv_path.relative_to(input_root).parts[0]
-        candidate = ProjectDiscovery(
-            input_root=input_root,
-            dataset_roots=dataset_roots,
-            jobs_csv_path=jobs_csv_path,
-            reference_images_dir=reference_root,
-            project_config_path=project_config_path,
-            manifest_seed_path=manifest_seed_path,
-            cache_seed_path=cache_seed_path,
-            preset_paths=preset_paths,
-            project_name=_slugify(dataset_name),
-            image_match_count=image_match_count,
-            notes=[],
-        )
-        if project_config_path is not None:
-            candidate.notes.append(f"Using project config: {project_config_path}")
-        if manifest_seed_path is not None:
-            candidate.notes.append(f"Found resume manifest seed: {manifest_seed_path}")
-        if cache_seed_path is not None:
-            candidate.notes.append(f"Found cache seed: {cache_seed_path}")
-        if preset_paths:
-            candidate.notes.append(
-                "Found optional presets: " + ", ".join(str(path) for path in preset_paths)
+        try:
+            reference_root, image_match_count, missing_image_refs, referenced_image_count = _discover_reference_root(
+                jobs_csv_path,
+                input_root,
             )
+            project_config_path = _find_nearest_config(jobs_csv_path, input_root)
+            preset_paths = _find_nearest_presets(jobs_csv_path, input_root)
+            current = jobs_csv_path.parent
+            manifest_seed_path: Optional[Path] = None
+            cache_seed_path: Optional[Path] = None
+            while True:
+                manifest_candidate = current / "manifest.json"
+                cache_candidate = current / "render_cache.json"
+                if manifest_seed_path is None and manifest_candidate.exists():
+                    manifest_seed_path = manifest_candidate
+                if cache_seed_path is None and cache_candidate.exists():
+                    cache_seed_path = cache_candidate
+                outputs_manifest = current / "outputs" / "manifest.json"
+                outputs_cache = current / "outputs" / "cache" / "render_cache.json"
+                if manifest_seed_path is None and outputs_manifest.exists():
+                    manifest_seed_path = outputs_manifest
+                if cache_seed_path is None and outputs_cache.exists():
+                    cache_seed_path = outputs_cache
+                if current == input_root or current.parent == current:
+                    break
+                current = current.parent
+
+            dataset_name = jobs_csv_path.relative_to(input_root).parts[0]
+            candidate = ProjectDiscovery(
+                input_root=input_root,
+                dataset_roots=dataset_roots,
+                jobs_csv_path=jobs_csv_path,
+                reference_images_dir=reference_root,
+                project_config_path=project_config_path,
+                manifest_seed_path=manifest_seed_path,
+                cache_seed_path=cache_seed_path,
+                preset_paths=preset_paths,
+                project_name=_slugify(dataset_name),
+                image_match_count=image_match_count,
+                referenced_image_count=referenced_image_count,
+                missing_image_refs=missing_image_refs,
+                notes=[],
+            )
+            if project_config_path is not None:
+                candidate.notes.append(f"Using project config: {project_config_path}")
+            if manifest_seed_path is not None:
+                candidate.notes.append(f"Found resume manifest seed: {manifest_seed_path}")
+            if cache_seed_path is not None:
+                candidate.notes.append(f"Found cache seed: {cache_seed_path}")
+            if preset_paths:
+                candidate.notes.append(
+                    "Found optional presets: " + ", ".join(str(path) for path in preset_paths)
+                )
+            if missing_image_refs:
+                candidate.notes.append(
+                    f"Missing referenced images: {len(missing_image_refs)}"
+                )
+        except Exception as exc:
+            candidate_errors.append(f"{jobs_csv_path}: {exc}")
+            continue
 
         if best_candidate is None:
             best_candidate = candidate
             continue
 
         current_score = (
+            -candidate.missing_image_count,
             candidate.image_match_count,
             1 if candidate.project_config_path else 0,
             1 if candidate.manifest_seed_path else 0,
             -len(candidate.jobs_csv_path.parts),
         )
         best_score = (
+            -best_candidate.missing_image_count,
             best_candidate.image_match_count,
             1 if best_candidate.project_config_path else 0,
             1 if best_candidate.manifest_seed_path else 0,
@@ -456,7 +659,14 @@ def discover_kaggle_project(input_root: Path = Path("/kaggle/input")) -> Project
             best_candidate = candidate
 
     if best_candidate is None:
-        raise FileNotFoundError("Unable to determine a project candidate from /kaggle/input")
+        raise FileNotFoundError(
+            "Unable to determine a valid project candidate from /kaggle/input. "
+            + ("; ".join(candidate_errors) if candidate_errors else "No valid jobs.csv candidates.")
+        )
+    if candidate_errors:
+        best_candidate.notes.extend(
+            ["Rejected candidate: " + error for error in candidate_errors]
+        )
     return best_candidate
 
 
@@ -558,9 +768,13 @@ def _restore_seed_file(source: Optional[Path], destination: Path) -> Optional[Pa
 
 
 def _summarize_resume(manifest_path: Optional[Path], cache_index_path: Optional[Path]) -> ResumeSummary:
+    notes: list[str] = []
     manifest_data = {"jobs": []}
     if manifest_path and manifest_path.exists():
-        manifest_data = _read_json(manifest_path)
+        try:
+            manifest_data = _read_json(manifest_path)
+        except Exception as exc:
+            notes.append(str(exc))
     jobs = manifest_data.get("jobs", [])
     total_jobs = len(jobs)
     completed_jobs = len(
@@ -574,7 +788,10 @@ def _summarize_resume(manifest_path: Optional[Path], cache_index_path: Optional[
 
     cache_entries = 0
     if cache_index_path and cache_index_path.exists():
-        cache_entries = len(_read_json(cache_index_path).get("entries", {}))
+        try:
+            cache_entries = len(_read_json(cache_index_path).get("entries", {}))
+        except Exception as exc:
+            notes.append(str(exc))
 
     return ResumeSummary(
         manifest_path=manifest_path if manifest_path and manifest_path.exists() else None,
@@ -585,6 +802,7 @@ def _summarize_resume(manifest_path: Optional[Path], cache_index_path: Optional[
         remaining_jobs=remaining_jobs,
         skipped_jobs=skipped_jobs,
         cache_entries=cache_entries,
+        notes=notes,
     )
 
 
@@ -665,6 +883,463 @@ class KaggleNotebookLauncher:
         self.source_root = detect_source_root(self.repo_root)
         self.context: Optional[NotebookLaunchContext] = None
         self.runner: Optional[ApplicationRunner] = None
+        self.state = LauncherExecutionState()
+        self._dashboard_errors: dict[str, str] = {}
+
+    def _reset_state(self) -> None:
+        self.context = None
+        self.runner = None
+        self.state = LauncherExecutionState()
+        self._dashboard_errors = {}
+
+    def _stage_suggestions(self, stage_name: str, exc: Optional[Exception] = None) -> list[str]:
+        suggestions = {
+            "bootstrap_context": [
+                "Confirm the repository was cloned successfully and contains the expected source tree.",
+                "Verify /kaggle/input contains a valid jobs.csv and referenced assets.",
+                "Check Drive credentials only if Google Drive upload is required.",
+            ],
+            "prepare_runtime": [
+                "Review the dependency and runtime sections in the bootstrap report.",
+                "Verify CUDA, Torch, FFmpeg, and model assets are compatible with the Kaggle runtime.",
+                "Disable optional features or use a lighter execution profile if a non-critical dependency failed.",
+            ],
+            "run_preflight": [
+                "Inspect validation_report.json and diagnostics.json for blocking issues.",
+                "Resolve CSV, image, disk, or configuration failures before retrying.",
+            ],
+            "display_preparation": [
+                "Re-run the notebook cell after resolving earlier bootstrap failures.",
+                "Inspect the bootstrap report object directly if notebook rendering is degraded.",
+            ],
+            "launch_pipeline": [
+                "Inspect logs, manifest, diagnostics, and validation reports in the output directory.",
+                "Retry after resolving the reported runtime or upload failure.",
+            ],
+        }.get(stage_name, ["Inspect the structured bootstrap report and generated diagnostics."])
+        if exc is not None and isinstance(exc, FileNotFoundError):
+            suggestions = [
+                "Confirm the expected file or dataset is attached and accessible.",
+                *suggestions,
+            ]
+        return suggestions
+
+    def _upsert_stage(self, stage: StageExecutionReport) -> None:
+        stages = [
+            existing
+            for existing in self.state.bootstrap_report.stages
+            if existing.stage_name != stage.stage_name
+        ]
+        stages.append(stage)
+        self.state.bootstrap_report.stages = stages
+
+    def _execute_stage(
+        self,
+        stage_name: str,
+        callback: Callable[[], Any],
+        *,
+        success_message: str,
+        skip_reason: Optional[str] = None,
+    ) -> Any:
+        started_at = datetime.now().isoformat()
+        started_monotonic = time.monotonic()
+        if skip_reason is not None:
+            stage = StageExecutionReport(
+                stage_name=stage_name,
+                status="SKIPPED",
+                started_at=started_at,
+                completed_at=datetime.now().isoformat(),
+                duration_seconds=0.0,
+                message=skip_reason,
+                suggestions=self._stage_suggestions(stage_name),
+            )
+            self._upsert_stage(stage)
+            self._refresh_bootstrap_report()
+            return None
+        try:
+            result = callback()
+        except Exception as exc:
+            stage = StageExecutionReport(
+                stage_name=stage_name,
+                status="FAILED",
+                started_at=started_at,
+                completed_at=datetime.now().isoformat(),
+                duration_seconds=round(time.monotonic() - started_monotonic, 2),
+                message=str(exc),
+                details={
+                    "exception_type": exc.__class__.__name__,
+                    "traceback": traceback.format_exc(limit=8),
+                },
+                suggestions=self._stage_suggestions(stage_name, exc),
+                error_type=exc.__class__.__name__,
+            )
+            self._upsert_stage(stage)
+            self._refresh_bootstrap_report()
+            return None
+        stage = StageExecutionReport(
+            stage_name=stage_name,
+            status="PASS",
+            started_at=started_at,
+            completed_at=datetime.now().isoformat(),
+            duration_seconds=round(time.monotonic() - started_monotonic, 2),
+            message=success_message,
+        )
+        self._upsert_stage(stage)
+        self._refresh_bootstrap_report()
+        return result
+
+    def _make_section(
+        self,
+        name: str,
+        status: str,
+        message: str,
+        *,
+        details: Optional[list[str]] = None,
+        suggestions: Optional[list[str]] = None,
+    ) -> BootstrapSection:
+        return BootstrapSection(
+            name=name,
+            status=status,
+            message=message,
+            details=details or [],
+            suggestions=suggestions or [],
+        )
+
+    def _make_launcher_failure_result(
+        self,
+        *,
+        category: str,
+        summary: str,
+        recommendation: str,
+    ) -> ApplicationRunResult:
+        config = self.context.config if self.context is not None else Config()
+        diagnostics = (
+            self.state.preparation.diagnostics
+            if self.state.preparation is not None
+            else {}
+        )
+        preflight = (
+            self.state.preparation.preflight
+            if self.state.preparation is not None
+            else {}
+        )
+        return ApplicationRunResult(
+            success=False,
+            exit_code=1,
+            started_at=datetime.now().isoformat(),
+            completed_at=datetime.now().isoformat(),
+            config=config,
+            diagnostics=diagnostics,
+            preflight=preflight,
+            summary={},
+            failure={
+                "category": category,
+                "summary": summary,
+                "recommendation": recommendation,
+            },
+        )
+
+    def _refresh_bootstrap_report(self) -> BootstrapReport:
+        sections: dict[str, BootstrapSection] = {}
+        stage_map = self.state.bootstrap_report.stage_by_name()
+        context = self.state.context
+        runtime_preparation = self.state.runtime_preparation
+        preparation = self.state.preparation
+
+        bootstrap_stage = stage_map.get("bootstrap_context")
+        if context is not None:
+            repo_status = "PASS" if context.repo_validation.ready else "FAILED"
+            if context.repo_validation.optional_missing:
+                repo_status = "WARNING" if repo_status == "PASS" else repo_status
+            sections["Repository"] = self._make_section(
+                "Repository",
+                repo_status,
+                "Repository validation complete.",
+                details=[
+                    f"Source Root: {context.source_root}",
+                    "Optional Missing: "
+                    + (", ".join(context.repo_validation.optional_missing) or "None"),
+                ],
+                suggestions=self._stage_suggestions("bootstrap_context"),
+            )
+        elif bootstrap_stage is not None and bootstrap_stage.status == "FAILED":
+            sections["Repository"] = self._make_section(
+                "Repository",
+                "FAILED",
+                bootstrap_stage.message,
+                details=[bootstrap_stage.details.get("exception_type", "")],
+                suggestions=bootstrap_stage.suggestions,
+            )
+        else:
+            sections["Repository"] = self._make_section(
+                "Repository",
+                "SKIPPED",
+                "Repository validation has not completed.",
+            )
+
+        dep_profile = runtime_preparation.get("dependency_profile") or {}
+        prepare_stage = stage_map.get("prepare_runtime")
+        failed_optional = dep_profile.get("failed_optional", [])
+        feature_statuses = dep_profile.get("feature_statuses", [])
+        verification_checks = dep_profile.get("verification", [])
+        required_feature_failures = [
+            status
+            for status in feature_statuses
+            if status.get("enabled") and status.get("required") and status.get("state") == "FAILED"
+        ]
+        runtime_failures = [check for check in verification_checks if not check.get("success")]
+
+        if dep_profile:
+            dep_status = "PASS"
+            if required_feature_failures:
+                dep_status = "FAILED"
+            elif failed_optional or dep_profile.get("skipped_packages"):
+                dep_status = "WARNING"
+            sections["Dependencies"] = self._make_section(
+                "Dependencies",
+                dep_status,
+                f"Execution profile `{dep_profile.get('profile_name', 'unknown')}` resolved.",
+                details=[
+                    "Enabled Features: "
+                    + (", ".join(dep_profile.get("enabled_features", [])) or "None"),
+                    f"Packages Installed This Run: {len(dep_profile.get('installed_packages', []))}",
+                    f"Optional Dependency Failures: {len(failed_optional)}",
+                ],
+                suggestions=self._stage_suggestions("prepare_runtime"),
+            )
+        elif prepare_stage is not None and prepare_stage.status == "FAILED":
+            sections["Dependencies"] = self._make_section(
+                "Dependencies",
+                "FAILED",
+                prepare_stage.message,
+                suggestions=prepare_stage.suggestions,
+            )
+        else:
+            sections["Dependencies"] = self._make_section(
+                "Dependencies",
+                "SKIPPED",
+                "Runtime dependency preparation has not completed.",
+            )
+        if dep_profile:
+            runtime_status = "PASS"
+            if required_feature_failures:
+                runtime_status = "FAILED"
+            elif runtime_failures:
+                runtime_status = "WARNING"
+            sections["Runtime"] = self._make_section(
+                "Runtime",
+                runtime_status,
+                f"Runtime verification completed for `{dep_profile.get('renderer_backend', 'unknown')}`.",
+                details=[
+                    f"Verification Checks: {len(verification_checks)}",
+                    f"Verification Failures: {len(runtime_failures)}",
+                    "Failed Checks: "
+                    + (
+                        ", ".join(check.get("name", "unknown") for check in runtime_failures[:5])
+                        or "None"
+                    ),
+                ],
+                suggestions=self._stage_suggestions("prepare_runtime"),
+            )
+        elif prepare_stage is not None and prepare_stage.status == "FAILED":
+            sections["Runtime"] = self._make_section(
+                "Runtime",
+                "FAILED",
+                prepare_stage.message,
+                suggestions=prepare_stage.suggestions,
+            )
+        else:
+            sections["Runtime"] = self._make_section(
+                "Runtime",
+                "SKIPPED",
+                "Runtime validation has not completed.",
+            )
+
+        if context is not None:
+            dataset_status = "PASS" if context.discovery.jobs_csv_path.exists() else "FAILED"
+            if dataset_status == "PASS" and context.discovery.missing_image_count:
+                dataset_status = "WARNING"
+            sections["Dataset"] = self._make_section(
+                "Dataset",
+                dataset_status,
+                f"Selected jobs.csv: {context.discovery.jobs_csv_path}",
+                details=(context.discovery.notes or [])
+                + [
+                    f"Reference Images Root: {context.discovery.reference_images_dir}",
+                    f"Referenced Images: {context.discovery.referenced_image_count}",
+                    f"Matched Images: {context.discovery.image_match_count}",
+                    f"Missing Images: {context.discovery.missing_image_count}",
+                ]
+                + (
+                    [f"First Missing Image: {context.discovery.missing_image_refs[0]}"]
+                    if context.discovery.missing_image_refs
+                    else []
+                ),
+                suggestions=[
+                    "Attach the intended Kaggle dataset and ensure jobs.csv contains valid image references.",
+                    "Resolve missing images before launch if the dataset section reports warnings.",
+                ],
+            )
+            drive_status = "PASS" if context.drive_credentials.enabled else "WARNING"
+            sections["Drive"] = self._make_section(
+                "Drive",
+                drive_status,
+                f"Drive mode: {context.drive_credentials.source}",
+                details=context.drive_credentials.notes,
+                suggestions=[
+                    "Add Kaggle secrets or credential JSON only if Drive upload is required."
+                ],
+            )
+            resume_status = "WARNING" if context.resume_summary.notes else "PASS"
+            sections["Resume"] = self._make_section(
+                "Resume",
+                resume_status,
+                (
+                    f"Manifest present={bool(context.resume_summary.manifest_path)} "
+                    f"cache_entries={context.resume_summary.cache_entries}"
+                ),
+                details=context.resume_summary.notes,
+                suggestions=[
+                    "Remove stale manifest/cache files if resume state looks inconsistent."
+                ],
+            )
+            sections["Configuration"] = self._make_section(
+                "Configuration",
+                "PASS",
+                f"Execution profile `{detect_execution_profile(context.config)}` loaded.",
+                details=[
+                    f"Renderer backend: {context.config.renderer_backend}",
+                    f"Project config: {context.discovery.project_config_path or 'Not found'}",
+                ],
+            )
+            env = context.environment_info
+            gpu = env.get("gpu", {})
+            disk = env.get("disk", {})
+            ram = env.get("ram", {})
+            sections["Environment"] = self._make_section(
+                "Environment",
+                "PASS",
+                f"Kaggle detected={env.get('is_kaggle', False)} platform={env.get('platform', 'Unknown')}",
+            )
+            sections["GPU"] = self._make_section(
+                "GPU",
+                "PASS" if gpu.get("available") else "WARNING",
+                gpu.get("name", "GPU unavailable"),
+            )
+            sections["CUDA"] = self._make_section(
+                "CUDA",
+                "PASS" if context.dependency_inspection.cuda_available else "WARNING",
+                context.dependency_inspection.cuda_version,
+            )
+            sections["Torch"] = self._make_section(
+                "Torch",
+                "PASS" if dep_profile.get("torch_version") else "SKIPPED",
+                dep_profile.get("torch_version", "Unavailable"),
+            )
+            sections["Python"] = self._make_section(
+                "Python",
+                "PASS",
+                env.get("python_version", sys.version.split()[0]),
+            )
+            sections["Disk"] = self._make_section(
+                "Disk",
+                "PASS" if disk.get("free_bytes") is not None else "WARNING",
+                _format_bytes(disk.get("free_bytes")),
+            )
+            sections["RAM"] = self._make_section(
+                "RAM",
+                "PASS" if ram.get("total_bytes") is not None else "WARNING",
+                _format_bytes(ram.get("total_bytes")),
+            )
+        else:
+            for section_name in ("Dataset", "Drive", "Resume", "Configuration", "Environment", "GPU", "CUDA", "Torch", "Python", "Disk", "RAM"):
+                sections[section_name] = self._make_section(
+                    section_name,
+                    "SKIPPED",
+                    "Context unavailable because bootstrap did not complete.",
+                )
+
+        if detect_renderer_dependency_profile(context.config) == "wan2gp" if context else False:
+            model_status = "PASS" if runtime_preparation.get("wan2gp_assets") else "WARNING"
+            if required_feature_failures:
+                model_status = "FAILED"
+            sections["Models"] = self._make_section(
+                "Models",
+                model_status,
+                (
+                    f"Wan2GP assets ready at "
+                    f"{(runtime_preparation.get('wan2gp_assets') or {}).get('model_dir', 'unknown')}"
+                ),
+                details=[
+                    f"Downloaded Files: {len((runtime_preparation.get('wan2gp_assets') or {}).get('downloaded_files', []))}",
+                    f"Existing Files: {len((runtime_preparation.get('wan2gp_assets') or {}).get('existing_files', []))}",
+                ],
+            )
+        else:
+            sections["Models"] = self._make_section(
+                "Models",
+                "SKIPPED" if context is None else "PASS",
+                "Wan2GP model preparation not required for the active renderer."
+                if context is not None
+                else "Model preparation unavailable because bootstrap did not complete.",
+            )
+
+        preflight_stage = stage_map.get("run_preflight")
+        if preparation is not None:
+            validation_status = "PASS" if preparation.ready else "FAILED"
+            if preparation.preflight.get("warnings") and preparation.ready:
+                validation_status = "WARNING"
+            sections["Validation"] = self._make_section(
+                "Validation",
+                validation_status,
+                f"Preflight ready={preparation.ready}",
+                details=[
+                    f"Diagnostics Status: {preparation.diagnostics.get('status', 'UNKNOWN')}",
+                    f"Blocking Failures: {len(preparation.preflight.get('blocking_failures', []))}",
+                    f"Warnings: {len(preparation.preflight.get('warnings', []))}",
+                ],
+                suggestions=self._stage_suggestions("run_preflight"),
+            )
+        elif preflight_stage is not None and preflight_stage.status == "FAILED":
+            sections["Validation"] = self._make_section(
+                "Validation",
+                "FAILED",
+                preflight_stage.message,
+                suggestions=preflight_stage.suggestions,
+            )
+        else:
+            sections["Validation"] = self._make_section(
+                "Validation",
+                "SKIPPED",
+                "Preflight has not completed.",
+            )
+
+        ready_to_launch = (
+            context is not None
+            and preparation is not None
+            and preparation.ready
+            and not required_feature_failures
+        )
+        self.state.bootstrap_report.sections = sections
+        self.state.bootstrap_report.ready_to_launch = ready_to_launch
+        self.state.bootstrap_report.summary_lines = [
+            "==================================",
+            "KAGGLE LAUNCH SUMMARY",
+            "==================================",
+            *[
+                f"{name}: {section.status} - {section.message}"
+                for name, section in sections.items()
+            ],
+            f"Ready To Launch: {'YES' if ready_to_launch else 'NO'}",
+            "==================================",
+        ]
+        return self.state.bootstrap_report
+
+    def get_execution_state(self) -> LauncherExecutionState:
+        return self.state
+
+    def can_launch_pipeline(self) -> bool:
+        return bool(self.state.bootstrap_report.ready_to_launch)
 
     def bootstrap_context(self) -> NotebookLaunchContext:
         dependency_inspection = inspect_runtime_dependencies()
@@ -724,19 +1399,14 @@ class KaggleNotebookLauncher:
             "disabled_features": dependency_report.disabled_features,
             "selected_requirements": dependency_report.selected_requirements,
             "installed_packages": [
-                item.package_name for item in dependency_report.installed_packages
+                _serialize_pip_result(item) for item in dependency_report.installed_packages
             ],
             "skipped_packages": [
-                {"package": item.package_name, "reason": item.reason}
+                _serialize_pip_result(item)
                 for item in dependency_report.skipped_packages
             ],
             "failed_optional": [
-                {
-                    "package": item.package_name,
-                    "exit_code": item.exit_code,
-                    "stdout": item.stdout,
-                    "stderr": item.stderr,
-                }
+                _serialize_pip_result(item)
                 for item in dependency_report.failed_optional
             ],
             "verification": [
@@ -763,9 +1433,14 @@ class KaggleNotebookLauncher:
             failure = dependency_report.failed_required[0]
             raise RuntimeError(
                 f"Required dependency install failed for {failure.package_name} "
-                f"(exit_code={failure.exit_code}).\n"
+                f"(requested={getattr(failure, 'requested_version', 'n/a') or 'n/a'}, "
+                f"installed_before={getattr(failure, 'installed_version_before', 'n/a') or 'n/a'}, "
+                f"python={getattr(failure, 'python_version', 'n/a') or 'n/a'}, "
+                f"cuda={getattr(failure, 'cuda_version', 'n/a') or 'n/a'}, "
+                f"exit_code={failure.exit_code}).\n"
                 f"stdout:\n{failure.stdout or '<empty>'}\n"
-                f"stderr:\n{failure.stderr or '<empty>'}"
+                f"stderr:\n{failure.stderr or '<empty>'}\n"
+                f"suggested_resolution:\n{getattr(failure, 'suggested_resolution', 'Review pip diagnostics and retry.')}"
             )
         failed_checks = [
             status
@@ -797,11 +1472,11 @@ class KaggleNotebookLauncher:
                     {
                         "profile_name": asset_report.dependency_report.profile_name,
                         "installed_packages": [
-                            item.package_name
+                            _serialize_pip_result(item)
                             for item in asset_report.dependency_report.installed_packages
                         ],
                         "failed_optional": [
-                            item.package_name
+                            _serialize_pip_result(item)
                             for item in asset_report.dependency_report.failed_optional
                         ],
                     }
@@ -813,6 +1488,7 @@ class KaggleNotebookLauncher:
         self.context.runtime_preparation = reports
         self.context.dependency_inspection = inspect_runtime_dependencies(self.context.config)
         self.context.config.extra["runtime_preparation"] = reports
+        self.state.runtime_preparation = reports
         return reports
 
     def run_preflight(self) -> PreparationResult:
@@ -823,30 +1499,63 @@ class KaggleNotebookLauncher:
         preparation = self.runner.prepare()
         if self.context is not None:
             self.context.preparation = preparation
+        self.state.preparation = preparation
         return preparation
 
     def prepare(self) -> NotebookLaunchContext:
-        self.bootstrap_context()
-        self.prepare_runtime()
-        self.run_preflight()
-        if self.context is None:
+        state = self.execute_bootstrap_flow()
+        if state.context is None:
             raise RuntimeError("Launcher context could not be prepared")
-        return self.context
+        return state.context
+
+    def execute_bootstrap_flow(self) -> LauncherExecutionState:
+        self._reset_state()
+        context = self._execute_stage(
+            "bootstrap_context",
+            self.bootstrap_context,
+            success_message="Bootstrap context created successfully.",
+        )
+        self.state.context = context
+        runtime = self._execute_stage(
+            "prepare_runtime",
+            self.prepare_runtime,
+            success_message="Runtime preparation completed.",
+            skip_reason=None if context is not None else "Skipped because bootstrap context failed.",
+        )
+        if isinstance(runtime, dict):
+            self.state.runtime_preparation = runtime
+        preparation = self._execute_stage(
+            "run_preflight",
+            self.run_preflight,
+            success_message="Preflight completed.",
+            skip_reason=None if context is not None and runtime is not None else "Skipped because runtime preparation failed.",
+        )
+        self.state.preparation = preparation if isinstance(preparation, PreparationResult) else None
+        self._execute_stage(
+            "display_preparation",
+            self.display_preparation,
+            success_message="Preparation report displayed.",
+        )
+        self._refresh_bootstrap_report()
+        return self.state
 
     def render_startup_banner(self) -> str:
-        if self.context is None:
-            raise RuntimeError("Launcher context not prepared")
-        env = self.context.environment_info
+        context = self.state.context
+        env = (context.environment_info if context is not None else {}) or {}
         gpu = env.get("gpu", {})
         ram = env.get("ram", {})
         disk = env.get("disk", {})
-        cuda_version = self.context.dependency_inspection.cuda_version
+        cuda_version = (
+            context.dependency_inspection.cuda_version
+            if context is not None
+            else "Unavailable"
+        )
         return "\n".join(
             [
                 f"# {APP_NAME}",
                 "",
                 f"- Version: `{APP_VERSION}`",
-                f"- Renderer Backend: `{self.context.config.renderer_backend}`",
+                f"- Renderer Backend: `{context.config.renderer_backend if context is not None else 'Unavailable'}`",
                 f"- Timestamp: `{datetime.now().isoformat()}`",
                 f"- Python Version: `{env.get('python_version', sys.version.split()[0])}`",
                 f"- CUDA Version: `{cuda_version}`",
@@ -859,50 +1568,26 @@ class KaggleNotebookLauncher:
         )
 
     def render_preparation_summary(self) -> str:
-        if self.context is None:
-            raise RuntimeError("Launcher context not prepared")
-        if self.context.preparation is None:
-            raise RuntimeError("Preflight has not been executed")
-        preflight = self.context.preparation.preflight
-        runtime_preparation = self.context.runtime_preparation
+        report = self._refresh_bootstrap_report()
+        stage_lines = []
+        for stage in report.stages:
+            stage_lines.append(
+                f"- {stage.stage_name}: `{stage.status}` in `{stage.duration_seconds:.2f}s`"
+                + (f" - {stage.message}" if stage.message else "")
+            )
+        section_lines = []
+        for section_name, section in report.sections.items():
+            section_lines.append(f"- {section_name}: `{section.status}` - {section.message}")
         return "\n".join(
             [
-                "## Automatic Discovery",
-                f"- Jobs CSV: `{self.context.discovery.jobs_csv_path}`",
-                f"- Reference Images Root: `{self.context.discovery.reference_images_dir}`",
-                f"- Project Config: `{self.context.discovery.project_config_path or 'Not found'}`",
-                f"- Optional Presets: `{len(self.context.discovery.preset_paths)}`",
-                f"- Source Root: `{self.context.source_root}`",
-                f"- Resume Manifest: `{self.context.resume_summary.manifest_path or 'Not found'}`",
-                f"- Cache Index: `{self.context.resume_summary.cache_index_path or 'Not found'}`",
-                f"- Drive Mode: `{self.context.drive_credentials.source}`",
+                "## Stage Status",
+                *stage_lines,
                 "",
-                "## Repository Validation",
-                f"- Critical Components Ready: `{self.context.repo_validation.ready}`",
-                f"- Optional Missing: `{', '.join(self.context.repo_validation.optional_missing) or 'None'}`",
-                f"- Dependency Profile: `{(runtime_preparation.get('dependency_profile') or {}).get('profile_name', 'bootstrap')}`",
-                f"- Execution Profile: `{detect_execution_profile(self.context.config)}`",
-                f"- Enabled Features: `{', '.join((runtime_preparation.get('dependency_profile') or {}).get('enabled_features', [])) or 'None'}`",
-                f"- Disabled Features: `{len((runtime_preparation.get('dependency_profile') or {}).get('disabled_features', {}))}`",
-                f"- Packages Installed This Run: `{len((runtime_preparation.get('dependency_profile') or {}).get('installed_packages', []))}`",
-                f"- Wan2GP Runtime Prepared: `{bool(runtime_preparation.get('wan2gp_runtime'))}`",
-                f"- Wan2GP Assets Downloaded: `{len((runtime_preparation.get('wan2gp_assets') or {}).get('downloaded_files', []))}`",
+                "## Bootstrap Report",
+                *section_lines,
                 "",
-                "## Resume Detection",
-                f"- Previous Manifest: `{bool(self.context.resume_summary.manifest_path)}`",
-                f"- Completed Jobs: `{self.context.resume_summary.completed_jobs}`",
-                f"- Remaining Jobs: `{self.context.resume_summary.remaining_jobs}`",
-                f"- Skipped Jobs: `{self.context.resume_summary.skipped_jobs}`",
-                f"- Cache Entries: `{self.context.resume_summary.cache_entries}`",
-                "",
-                "## Preflight",
-                f"- Diagnostics Status: `{self.context.preparation.diagnostics.get('status', 'UNKNOWN')}`",
-                f"- Preflight Ready: `{preflight.get('ready', False)}`",
-                f"- Expected Clip Count: `{preflight.get('expected_clip_count', 0)}`",
-                f"- Estimated Runtime: `{_format_duration(preflight.get('estimated_runtime_seconds'))}`",
-                f"- Estimated Storage: `{_format_bytes(preflight.get('estimated_storage_bytes'))}`",
-                f"- Blocking Failures: `{len(preflight.get('blocking_failures', []))}`",
-                f"- Warnings: `{len(preflight.get('warnings', []))}`",
+                "## Ready To Launch",
+                f"- Ready: `{report.ready_to_launch}`",
             ]
         )
 
@@ -910,31 +1595,30 @@ class KaggleNotebookLauncher:
         _render_markdown(self.render_startup_banner())
         _render_markdown(self.render_preparation_summary())
 
-    def _load_snapshot(self) -> dict[str, Any]:
-        if self.context is None:
-            return {}
-        heartbeat_path = self.context.config.heartbeat_path
-        if heartbeat_path.exists():
-            try:
-                return _read_json(heartbeat_path)
-            except Exception:
-                return {}
-        return {}
+    def render_bootstrap_report(self) -> str:
+        report = self._refresh_bootstrap_report()
+        return "\n".join(report.summary_lines)
 
-    def _load_manifest(self) -> dict[str, Any]:
-        if self.context is None:
+    def _load_runtime_json(self, path: Optional[Path], *, label: str) -> dict[str, Any]:
+        if path is None or not path.exists():
             return {}
-        manifest_path = self.context.config.manifest_path
-        if manifest_path.exists():
-            try:
-                return _read_json(manifest_path)
-            except Exception:
-                return {}
-        return {}
+        try:
+            self._dashboard_errors.pop(label, None)
+            return _read_json(path)
+        except Exception as exc:
+            self._dashboard_errors[label] = str(exc)
+            return {}
 
     def _build_dashboard_markdown(self, started_monotonic: float) -> str:
-        snapshot = self._load_snapshot()
-        manifest = self._load_manifest()
+        context = self.state.context
+        snapshot = self._load_runtime_json(
+            context.config.heartbeat_path if context is not None else None,
+            label="heartbeat",
+        )
+        manifest = self._load_runtime_json(
+            context.config.manifest_path if context is not None else None,
+            label="manifest",
+        )
         completed_jobs = int(snapshot.get("completed_jobs", 0))
         failed_jobs = int(snapshot.get("failed_jobs", 0))
         remaining_jobs = int(snapshot.get("remaining_jobs", 0))
@@ -949,7 +1633,10 @@ class KaggleNotebookLauncher:
                 if str(job.get("uploaded_at") or "").strip()
             ]
         )
-        stitched_output = self.context.config.stitched_output_path if self.context else None
+        stitched_output = context.config.stitched_output_path if context else None
+        dashboard_notes = [
+            f"{label}: {message}" for label, message in sorted(self._dashboard_errors.items())
+        ]
         return "\n".join(
             [
                 "# Runtime Dashboard",
@@ -971,12 +1658,13 @@ class KaggleNotebookLauncher:
                 f"- VRAM Usage: `{snapshot.get('vram_used_mb', 'N/A')} / {snapshot.get('vram_total_mb', 'N/A')} MB`",
                 f"- CPU Utilization: `{snapshot.get('cpu_percent', 'N/A')}`",
                 f"- RAM Usage: `{snapshot.get('ram_used_mb', 'N/A')} / {snapshot.get('ram_total_mb', 'N/A')} MB`",
-                f"- Disk Free: `{_format_bytes((self.context.environment_info if self.context else {}).get('disk', {}).get('free_bytes'))}`",
-                f"- Google Drive Status: `{self.context.drive_credentials.source if self.context else 'N/A'}`",
-                f"- Resume Status: `completed={self.context.resume_summary.completed_jobs if self.context else 0} remaining={self.context.resume_summary.remaining_jobs if self.context else 0}`",
-                f"- Heartbeat Path: `{self.context.config.heartbeat_path if self.context else 'N/A'}`",
-                f"- Manifest Path: `{self.context.config.manifest_path if self.context else 'N/A'}`",
+                f"- Disk Free: `{_format_bytes((context.environment_info if context else {}).get('disk', {}).get('free_bytes'))}`",
+                f"- Google Drive Status: `{context.drive_credentials.source if context else 'N/A'}`",
+                f"- Resume Status: `completed={context.resume_summary.completed_jobs if context else 0} remaining={context.resume_summary.remaining_jobs if context else 0}`",
+                f"- Heartbeat Path: `{context.config.heartbeat_path if context else 'N/A'}`",
+                f"- Manifest Path: `{context.config.manifest_path if context else 'N/A'}`",
                 f"- Stitched Output Target: `{stitched_output if stitched_output else 'N/A'}`",
+                f"- Dashboard Parse Errors: `{'; '.join(dashboard_notes) or 'None'}`",
             ]
         )
 
@@ -1024,21 +1712,79 @@ class KaggleNotebookLauncher:
             ]
         )
 
+    def get_artifact_report(self) -> dict[str, dict[str, Any]]:
+        context = self.state.context
+        if context is None:
+            return {}
+        artifact_paths = {
+            "report_json": context.config.report_path,
+            "summary_txt": context.config.summary_path,
+            "diagnostics_json": context.config.diagnostics_path,
+            "validation_report_json": context.config.validation_report_path,
+            "performance_json": context.config.performance_report_path,
+            "benchmark_json": context.config.benchmark_json_path,
+            "manifest_json": context.config.manifest_path,
+            "heartbeat_json": context.config.heartbeat_path,
+            "stitched_output": context.config.stitched_output_path,
+            "thumbnail": context.config.thumbnail_path,
+            "preview_480p": context.config.preview_480p_path,
+            "preview_720p": context.config.preview_720p_path,
+            "log_dir": context.config.log_dir,
+        }
+        return {
+            name: {"path": str(path), "exists": path.exists()}
+            for name, path in artifact_paths.items()
+        }
+
+    def execute_pipeline_stage(self, *, refresh_seconds: int = 5) -> ApplicationRunResult:
+        if self.state.context is None or self.state.preparation is None:
+            self.execute_bootstrap_flow()
+        if not self.can_launch_pipeline():
+            result = self._make_launcher_failure_result(
+                category="bootstrap",
+                summary="Launch pipeline skipped because bootstrap did not complete successfully.",
+                recommendation="Review the bootstrap report above and resolve the failed stage before retrying.",
+            )
+            self.state.result = result
+            self._execute_stage(
+                "launch_pipeline",
+                lambda: result,
+                success_message="Launch skipped.",
+                skip_reason="Skipped because the launcher is not ready to launch.",
+            )
+            return result
+        return self.run_with_dashboard(refresh_seconds=refresh_seconds)
+
     def run_with_dashboard(self, *, refresh_seconds: int = 5) -> ApplicationRunResult:
+        if self.context is None or self.runner is None or self.state.preparation is None:
+            self.execute_bootstrap_flow()
         if self.context is None or self.runner is None:
-            self.prepare()
-        if self.context is None or self.runner is None:
-            raise RuntimeError("Launcher context could not be prepared")
-        if self.context.preparation is None:
-            raise RuntimeError("Preflight has not been executed")
-        if not self.context.preparation.ready:
+            result = self._make_launcher_failure_result(
+                category="bootstrap",
+                summary="Launcher context could not be prepared.",
+                recommendation="Resolve repository, dataset, or dependency issues reported in the bootstrap report.",
+            )
+            self.state.result = result
+            return result
+        if self.state.preparation is None:
+            result = self._make_launcher_failure_result(
+                category="preflight",
+                summary="Preflight did not execute.",
+                recommendation="Review the staged bootstrap report and rerun after fixing the failed stage.",
+            )
+            self.state.result = result
+            return result
+        if not self.state.preparation.ready:
             result = self.runner.run(preflight_only=True)
+            self.state.result = result
             _render_markdown(self._render_failure_summary(result))
             return result
 
+        started_at = datetime.now().isoformat()
         started_monotonic = time.monotonic()
         executor = ThreadPoolExecutor(max_workers=1)
         future: Future[ApplicationRunResult] = executor.submit(self.runner.run_pipeline_only)
+        result: ApplicationRunResult
         try:
             while not future.done():
                 _clear_output(wait=True)
@@ -1046,9 +1792,29 @@ class KaggleNotebookLauncher:
                 _render_markdown(self._build_dashboard_markdown(started_monotonic))
                 time.sleep(max(1, refresh_seconds))
             result = future.result()
+        except Exception as exc:
+            result = self._make_launcher_failure_result(
+                category="launch",
+                summary=str(exc),
+                recommendation="Inspect logs, diagnostics, and manifest artifacts for the failing runtime stage.",
+            )
         finally:
             executor.shutdown(wait=True)
 
+        self.state.result = result
+        launch_stage = StageExecutionReport(
+            stage_name="launch_pipeline",
+            status="PASS" if result.success else "FAILED",
+            started_at=started_at,
+            completed_at=datetime.now().isoformat(),
+            duration_seconds=round(time.monotonic() - started_monotonic, 2),
+            message="Pipeline completed successfully." if result.success else result.failure.get("summary", "Pipeline execution failed."),
+            details={"failure": result.failure} if not result.success else {},
+            suggestions=self._stage_suggestions("launch_pipeline"),
+            error_type=result.failure.get("exception_type", "") if not result.success else "",
+        )
+        self._upsert_stage(launch_stage)
+        self._refresh_bootstrap_report()
         _clear_output(wait=True)
         self.display_preparation()
         if result.success:

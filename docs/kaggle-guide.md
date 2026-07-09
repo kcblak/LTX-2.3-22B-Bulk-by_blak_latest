@@ -35,14 +35,13 @@ The current launcher executes the following phases:
 4. Detect whether the source root is the repository root or `src/`.
 5. Validate critical repository files before importing any repository modules.
 6. Import repository launcher helpers and resolve the bootstrap dependency profile.
-7. Import repository launcher helpers.
-8. Produce a repository-aware dependency report.
-9. Bootstrap the launcher context.
-10. Resolve the execution profile, enabled feature graph, active renderer runtime, and runtime validation report.
+7. Produce a repository-aware dependency report.
+8. Execute the staged launcher flow: `bootstrap_context` -> `prepare_runtime` -> `run_preflight` -> `display_preparation`.
+9. Build a structured `BootstrapReport` with stage timing, PASS/WARNING/FAILED/SKIPPED statuses, explanations, and recovery suggestions.
+10. Resolve the execution profile, enabled feature graph, active renderer runtime, dataset discovery report, and runtime validation report.
 11. Prepare Wan2GP runtime/model assets when needed.
-12. Run diagnostics and preflight.
-13. Launch the production application and display the live dashboard.
-14. Print final artifact paths and fail explicitly if the run did not succeed.
+12. Launch the production application through the staged pipeline entry point and display the live dashboard.
+13. Print final artifact paths and fail explicitly only after structured diagnostics have been rendered.
 
 ## Configuration
 
@@ -57,10 +56,15 @@ External configuration is supported through environment variables:
 
 Repository configuration now also supports feature-aware dependency control:
 
-- `execution_profile`: selects an execution profile such as `kaggle_bulk`, `kaggle_interactive`, `local_development`, `workstation`, or `production_server`
+- `execution_profile`: selects an execution profile such as `kaggle_bulk`, `kaggle_interactive`, `local_development`, `production`, or `testing`
 - `features`: enables or disables optional feature groups without editing installer code
 - `dependency_allow_experimental`: allows experimental package groups when explicitly enabled
 - `dependency_allow_development_wheels`: allows development-wheel packages when explicitly enabled
+
+Legacy aliases remain accepted for compatibility:
+
+- `workstation` -> `local_development`
+- `production_server` -> `production`
 
 Feature groups currently modeled by the repository include:
 
@@ -94,6 +98,7 @@ Instead it:
 - resolves the enabled feature graph
 - filters packages by platform, Kaggle compatibility, and Python compatibility
 - installs only missing packages required by enabled features
+- captures package install duration, stdout, stderr, platform, Python, CUDA, and suggested resolution for every attempted install
 - records optional-package failures without aborting the render path
 - verifies enabled features independently
 
@@ -107,6 +112,20 @@ When the selected renderer backend is `auto` or `wan2gp`, the repository launche
 - MSR LoRA asset when MSR is enabled
 
 The notebook does not download model assets directly. It delegates that work to repository code.
+
+## Bootstrap Reporting
+
+The launcher now produces a structured bootstrap report before launch.
+
+Each stage records:
+
+- PASS, FAILED, or SKIPPED status
+- started/completed timestamps
+- elapsed time
+- exception type and traceback snippet when a stage fails
+- recovery suggestions tailored to the stage
+
+The report sections summarize repository, runtime, dependencies, dataset discovery, Drive, resume state, configuration, environment, GPU, CUDA, Torch, Python, disk, RAM, models, and validation readiness.
 
 ## Resume
 
