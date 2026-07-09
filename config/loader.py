@@ -65,6 +65,7 @@ def _flatten_config_sections(data: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, dict) and key in {
             "paths",
             "model",
+            "repository",
             "drive",
             "pipeline",
             "logging",

@@ -163,6 +163,10 @@ execution:
   dependency_allow_pre_release: false
   dependency_allow_development_wheels: false
 
+repository:
+  repository_source: "github"
+  repository_update_policy: "auto"
+
 features:
   core_renderer: true
   wan2gp_runtime: true

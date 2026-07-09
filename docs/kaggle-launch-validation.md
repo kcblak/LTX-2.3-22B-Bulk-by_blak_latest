@@ -37,6 +37,8 @@ The current launcher satisfies the following design constraints:
 - Every notebook stage is wrapped independently and captured in the staged bootstrap report.
 - Execution profiles can change enabled feature sets without code edits.
 - Execution profiles support `kaggle_bulk`, `kaggle_interactive`, `local_development`, `production`, and `testing`.
+- Repository bootstrap supports `github` and `dataset` repository sources.
+- Repository bootstrap supports `auto`, `never`, and `force` update policies.
 - Feature manifests preserve optional upstream capabilities without installing them unnecessarily.
 - Dependency installation records stdout, stderr, exit code, duration, Python, CUDA, and suggested resolution per package.
 - Dataset discovery reports referenced image counts and missing image references before launch.
@@ -54,3 +56,4 @@ The current launcher satisfies the following design constraints:
 - The notebook does not implement renderer internals, queueing, uploads, or stitching.
 - Runtime verification still depends on the actual Kaggle environment for package availability, CUDA state, and network access.
 - Real Kaggle execution and live Google Drive credentials still require runtime verification in Kaggle.
+- Offline recovery depends on a valid local source tree already being present in `/kaggle/working` or `/kaggle/input`.

@@ -72,12 +72,41 @@ class RequirementFileReport:
 
 
 @dataclass
+class GitCommandResult:
+    command: list[str]
+    cwd: Optional[str]
+    success: bool
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+    duration_seconds: float = 0.0
+    timed_out: bool = False
+    note: str = ""
+
+
+@dataclass
 class GitCheckoutReport:
     destination: Path
     repo_url: str
     ref: str
     cloned: bool
     updated: bool
+    source: str = "github"
+    update_policy: str = "auto"
+    used_local_copy: bool = False
+    local_copy_reason: str = ""
+    repository_state: str = "unknown"
+    current_branch: str = ""
+    default_branch: str = ""
+    remote_name: str = "origin"
+    remote_url: str = ""
+    remote_reachable: bool = False
+    working_tree: str = "unknown"
+    target_ref: str = ""
+    validation_messages: list[str] = field(default_factory=list)
+    recovery_actions: list[str] = field(default_factory=list)
+    command_results: list[GitCommandResult] = field(default_factory=list)
+    failure_reason: str = ""
 
 
 @dataclass
@@ -751,22 +780,147 @@ def _run_checked_command(
     cwd: Optional[Path] = None,
     field_name: str = "command",
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        command,
-        cwd=str(cwd) if cwd is not None else None,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
+    command_result = _run_command_result(command, cwd=cwd)
+    if not command_result.success:
         command_text = " ".join(command)
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
+        stdout = command_result.stdout.strip()
+        stderr = command_result.stderr.strip()
         raise RuntimeError(
-            f"{field_name} failed (exit_code={result.returncode}): {command_text}\n"
+            f"{field_name} failed (exit_code={command_result.exit_code}): {command_text}\n"
             f"stdout:\n{stdout or '<empty>'}\n"
             f"stderr:\n{stderr or '<empty>'}"
         )
+    return subprocess.CompletedProcess(
+        command,
+        command_result.exit_code,
+        stdout=command_result.stdout,
+        stderr=command_result.stderr,
+    )
+
+
+def _run_command_result(
+    command: list[str],
+    *,
+    cwd: Optional[Path] = None,
+    timeout_seconds: int = 20,
+    note: str = "",
+) -> GitCommandResult:
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(cwd) if cwd is not None else None,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+        return GitCommandResult(
+            command=list(command),
+            cwd=str(cwd) if cwd is not None else None,
+            success=result.returncode == 0,
+            exit_code=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            duration_seconds=round(time.monotonic() - started, 2),
+            note=note,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return GitCommandResult(
+            command=list(command),
+            cwd=str(cwd) if cwd is not None else None,
+            success=False,
+            exit_code=-1,
+            stdout=exc.stdout or "",
+            stderr=exc.stderr or "",
+            duration_seconds=round(time.monotonic() - started, 2),
+            timed_out=True,
+            note=note or "Command timed out",
+        )
+
+
+def _normalize_repository_source(value: str) -> str:
+    normalized = (value or "github").strip().lower()
+    if normalized not in {"github", "dataset"}:
+        raise ValueError("repository source must be 'github' or 'dataset'")
+    return normalized
+
+
+def _normalize_update_policy(value: str) -> str:
+    normalized = (value or "auto").strip().lower()
+    if normalized not in {"auto", "never", "force"}:
+        raise ValueError("repository update policy must be 'auto', 'never', or 'force'")
+    return normalized
+
+
+def _append_git_result(report: GitCheckoutReport, result: GitCommandResult) -> GitCommandResult:
+    report.command_results.append(result)
     return result
+
+
+def _path_looks_like_source_tree(destination: Path) -> bool:
+    if not destination.exists() or not destination.is_dir():
+        return False
+    try:
+        return any(destination.iterdir())
+    except Exception:
+        return False
+
+
+def _git_command(
+    report: GitCheckoutReport,
+    command: list[str],
+    *,
+    cwd: Optional[Path] = None,
+    timeout_seconds: int = 20,
+    note: str = "",
+) -> GitCommandResult:
+    return _append_git_result(
+        report,
+        _run_command_result(
+            command,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            note=note,
+        ),
+    )
+
+
+def _describe_working_tree(status_output: str) -> str:
+    lines = [line for line in status_output.splitlines() if line.strip()]
+    if any(line.startswith("##") and "detached" in line.lower() for line in lines):
+        return "detached"
+    if len(lines) <= 1:
+        return "clean"
+    return "dirty"
+
+
+def _first_nonempty_line(text: str) -> str:
+    for line in text.splitlines():
+        cleaned = line.strip()
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def _remote_branch_names(output: str) -> list[str]:
+    branches: list[str] = []
+    for line in output.splitlines():
+        cleaned = line.strip()
+        if not cleaned or "->" in cleaned:
+            continue
+        if cleaned.startswith("origin/"):
+            branches.append(cleaned.split("/", 1)[1])
+    return branches
+
+
+def _parse_default_branch(output: str) -> str:
+    for line in output.splitlines():
+        cleaned = line.strip()
+        if cleaned.startswith("ref: refs/heads/") and cleaned.endswith("HEAD"):
+            branch = cleaned[len("ref: refs/heads/") :].split("\t", 1)[0].strip()
+            if branch:
+                return branch
+    return ""
 
 
 def _build_profile_specs(
@@ -1602,52 +1756,255 @@ def ensure_runtime_dependency_profile(config: Config) -> DependencyProfileReport
     return report
 
 
-def ensure_git_checkout(destination: Path, repo_url: str, ref: str = "main") -> GitCheckoutReport:
+def ensure_git_checkout(
+    destination: Path,
+    repo_url: str,
+    ref: str = "main",
+    *,
+    source: str = "github",
+    update_policy: str = "auto",
+) -> GitCheckoutReport:
     destination = destination.resolve(strict=False)
     repo_url = _sanitize_git_text(repo_url, field_name="repo_url")
     ref = _sanitize_git_text(ref, field_name="ref")
-    cloned = False
-    updated = False
-
-    if not destination.exists():
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        _run_checked_command(
-            ["git", "clone", "--depth", "1", "--branch", ref, repo_url, str(destination)],
-            field_name="git clone",
-        )
-        cloned = True
-    elif (destination / ".git").exists():
-        _run_checked_command(
-            ["git", "-C", str(destination), "fetch", "--depth", "1", "origin", ref],
-            field_name="git fetch",
-        )
-        try:
-            _run_checked_command(
-                ["git", "-C", str(destination), "rev-parse", "--verify", ref],
-                field_name="git rev-parse",
-            )
-            _run_checked_command(
-                ["git", "-C", str(destination), "checkout", ref],
-                field_name="git checkout",
-            )
-        except RuntimeError:
-            _run_checked_command(
-                ["git", "-C", str(destination), "checkout", "-b", ref, f"origin/{ref}"],
-                field_name="git checkout -b",
-            )
-        _run_checked_command(
-            ["git", "-C", str(destination), "pull", "--ff-only", "origin", ref],
-            field_name="git pull",
-        )
-        updated = True
-
-    return GitCheckoutReport(
+    source = _normalize_repository_source(source)
+    update_policy = _normalize_update_policy(update_policy)
+    report = GitCheckoutReport(
         destination=destination,
         repo_url=repo_url,
         ref=ref,
-        cloned=cloned,
-        updated=updated,
+        target_ref=ref,
+        cloned=False,
+        updated=False,
+        source=source,
+        update_policy=update_policy,
     )
+
+    def use_local_copy(reason: str, state: str) -> GitCheckoutReport:
+        report.used_local_copy = True
+        report.local_copy_reason = reason
+        report.repository_state = state
+        report.validation_messages.append(reason)
+        return report
+
+    def reclone(reason: str) -> bool:
+        report.recovery_actions.append(reason)
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        clone_result = _git_command(
+            report,
+            ["git", "clone", "--depth", "1", "--branch", report.target_ref, repo_url, str(destination)],
+            note="clone repository",
+            timeout_seconds=60,
+        )
+        if not clone_result.success:
+            report.failure_reason = (
+                f"git clone failed (exit_code={clone_result.exit_code})\n"
+                f"stdout:\n{clone_result.stdout or '<empty>'}\n"
+                f"stderr:\n{clone_result.stderr or '<empty>'}"
+            )
+            return False
+        report.cloned = True
+        report.repository_state = "cloned"
+        report.remote_name = "origin"
+        report.remote_url = repo_url
+        report.remote_reachable = True
+        report.current_branch = report.target_ref
+        report.default_branch = report.target_ref
+        report.working_tree = "clean"
+        return True
+
+    if source == "dataset":
+        if _path_looks_like_source_tree(destination):
+            return use_local_copy(
+                "Using dataset-provided repository source tree without Git operations.",
+                "dataset_source",
+            )
+        report.failure_reason = (
+            f"Repository source is configured as dataset, but no valid source tree exists at {destination}."
+        )
+        return report
+
+    if update_policy == "force" and destination.exists():
+        report.recovery_actions.append("Force policy requested a fresh clone.")
+        if not reclone("Removing existing checkout before fresh clone."):
+            return report
+        return report
+
+    if not destination.exists():
+        if not reclone("Repository directory was missing."):
+            return report
+        return report
+
+    if not (destination / ".git").exists():
+        if _path_looks_like_source_tree(destination):
+            return use_local_copy(
+                "Destination contains a source tree without .git metadata; treating it as a dataset/local copy.",
+                "local_source_tree",
+            )
+        if not reclone("Destination existed but was not a Git checkout."):
+            return report
+        return report
+
+    git_dir_check = _git_command(
+        report,
+        ["git", "-C", str(destination), "rev-parse", "--git-dir"],
+        note="validate git metadata",
+    )
+    if not git_dir_check.success:
+        if not reclone("Git metadata was invalid or corrupted; recreating checkout."):
+            return report
+        return report
+
+    report.repository_state = "git_checkout"
+    branch_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "branch", "--show-current"],
+        note="detect current branch",
+    )
+    report.current_branch = _first_nonempty_line(branch_result.stdout) if branch_result.success else ""
+    if not report.current_branch:
+        report.validation_messages.append("Checkout is currently detached.")
+
+    status_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "status", "--short", "--branch"],
+        note="inspect working tree",
+    )
+    report.working_tree = (
+        _describe_working_tree(status_result.stdout)
+        if status_result.success
+        else "unknown"
+    )
+
+    remote_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "remote", "get-url", "origin"],
+        note="read origin remote",
+    )
+    if remote_result.success:
+        report.remote_url = _first_nonempty_line(remote_result.stdout)
+    else:
+        report.validation_messages.append("Origin remote missing.")
+        add_remote = _git_command(
+            report,
+            ["git", "-C", str(destination), "remote", "add", "origin", repo_url],
+            note="repair missing origin",
+        )
+        if add_remote.success:
+            report.recovery_actions.append("Recreated missing origin remote.")
+            report.remote_url = repo_url
+        else:
+            set_remote = _git_command(
+                report,
+                ["git", "-C", str(destination), "remote", "set-url", "origin", repo_url],
+                note="repair origin url",
+            )
+            if set_remote.success:
+                report.recovery_actions.append("Repaired origin remote URL.")
+                report.remote_url = repo_url
+
+    if report.remote_url and report.remote_url != repo_url:
+        set_url_result = _git_command(
+            report,
+            ["git", "-C", str(destination), "remote", "set-url", "origin", repo_url],
+            note="replace incorrect origin url",
+        )
+        if set_url_result.success:
+            report.recovery_actions.append("Replaced incorrect origin remote URL.")
+            report.remote_url = repo_url
+
+    ls_remote_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "ls-remote", "--symref", "origin", "HEAD"],
+        note="check remote reachability",
+        timeout_seconds=15,
+    )
+    report.remote_reachable = ls_remote_result.success
+    if ls_remote_result.success:
+        report.default_branch = _parse_default_branch(ls_remote_result.stdout) or ref
+    else:
+        report.validation_messages.append(
+            "Remote repository is not reachable; offline recovery mode enabled."
+        )
+
+    if update_policy == "never":
+        if _path_looks_like_source_tree(destination):
+            return use_local_copy(
+                "Repository update policy is set to never; using the local checkout as-is.",
+                "local_checkout_policy_never",
+            )
+        report.failure_reason = f"Repository update policy is 'never' but no usable source tree exists at {destination}."
+        return report
+
+    if not report.remote_reachable:
+        if _path_looks_like_source_tree(destination):
+            return use_local_copy(
+                "Remote is unreachable, but a local repository copy is available.",
+                "offline_local_checkout",
+            )
+        report.failure_reason = (
+            "Remote repository is unreachable and no valid local source tree is available."
+        )
+        return report
+
+    remote_branches_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "branch", "-r"],
+        note="list remote branches",
+    )
+    remote_branches = (
+        _remote_branch_names(remote_branches_result.stdout)
+        if remote_branches_result.success
+        else []
+    )
+    if remote_branches and ref not in remote_branches:
+        fallback_branch = report.default_branch or (remote_branches[0] if remote_branches else ref)
+        report.validation_messages.append(
+            f"Configured branch '{ref}' was not available remotely; falling back to '{fallback_branch}'."
+        )
+        report.recovery_actions.append(
+            f"Selected fallback branch '{fallback_branch}' because '{ref}' was unavailable."
+        )
+        report.target_ref = fallback_branch
+    else:
+        report.target_ref = ref
+
+    fetch_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "fetch", "--depth", "1", "origin", report.target_ref],
+        note="fetch target branch",
+        timeout_seconds=60,
+    )
+    if not fetch_result.success:
+        if _path_looks_like_source_tree(destination):
+            return use_local_copy(
+                "Fetch failed, but a valid local source tree is available.",
+                "local_source_after_fetch_failure",
+            )
+        if not reclone("Fetch failed; attempting fresh clone recovery."):
+            return report
+        return report
+
+    checkout_result = _git_command(
+        report,
+        ["git", "-C", str(destination), "checkout", "-B", report.target_ref, f"origin/{report.target_ref}"],
+        note="checkout target branch",
+        timeout_seconds=30,
+    )
+    if not checkout_result.success:
+        if not reclone("Checkout failed; attempting fresh clone recovery."):
+            return report
+        return report
+
+    report.updated = True
+    report.current_branch = report.target_ref
+    report.default_branch = report.default_branch or report.target_ref
+    report.remote_url = repo_url
+    report.repository_state = "healthy"
+    report.working_tree = "clean"
+    return report
 
 
 def ensure_wan2gp_runtime(config: Config) -> GitCheckoutReport:

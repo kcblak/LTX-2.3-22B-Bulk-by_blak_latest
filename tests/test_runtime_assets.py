@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from subprocess import CompletedProcess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -242,7 +243,15 @@ class RuntimeAssetTests(unittest.TestCase):
     def test_ensure_git_checkout_strips_wrapping_backticks_and_spaces(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             destination = Path(temp_dir) / "repo"
-            with patch("orchestration.runtime_assets._run_checked_command") as mock_run:
+            with patch(
+                "orchestration.runtime_assets.subprocess.run",
+                return_value=CompletedProcess(
+                    args=[],
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            ) as mock_run:
                 from orchestration.runtime_assets import ensure_git_checkout
 
                 report = ensure_git_checkout(
@@ -251,7 +260,9 @@ class RuntimeAssetTests(unittest.TestCase):
                     ref=" `main` ",
                 )
 
-            mock_run.assert_called_once_with(
+            first_command = mock_run.call_args_list[0].args[0]
+            self.assertEqual(
+                first_command,
                 [
                     "git",
                     "clone",
@@ -262,10 +273,99 @@ class RuntimeAssetTests(unittest.TestCase):
                     "https://github.com/example/project.git",
                     str(destination.resolve(strict=False)),
                 ],
-                field_name="git clone",
             )
             self.assertEqual(report.repo_url, "https://github.com/example/project.git")
             self.assertEqual(report.ref, "main")
+            self.assertTrue(report.cloned)
+
+    def test_ensure_git_checkout_uses_dataset_source_without_git(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "repo"
+            destination.mkdir()
+            (destination / "main.py").write_text("print('ok')", encoding="utf-8")
+
+            from orchestration.runtime_assets import ensure_git_checkout
+
+            report = ensure_git_checkout(
+                destination=destination,
+                repo_url="https://github.com/example/project.git",
+                ref="main",
+                source="dataset",
+            )
+
+        self.assertTrue(report.used_local_copy)
+        self.assertEqual(report.repository_state, "dataset_source")
+        self.assertFalse(report.command_results)
+
+    def test_ensure_git_checkout_uses_local_copy_when_remote_is_offline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "repo"
+            (destination / ".git").mkdir(parents=True)
+
+            command_results = [
+                CompletedProcess(args=[], returncode=0, stdout=".git\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="main\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="## main\n", stderr=""),
+                CompletedProcess(
+                    args=[],
+                    returncode=0,
+                    stdout="https://github.com/example/project.git\n",
+                    stderr="",
+                ),
+                CompletedProcess(args=[], returncode=128, stdout="", stderr="offline"),
+            ]
+
+            with patch(
+                "orchestration.runtime_assets.subprocess.run",
+                side_effect=command_results,
+            ):
+                from orchestration.runtime_assets import ensure_git_checkout
+
+                report = ensure_git_checkout(
+                    destination=destination,
+                    repo_url="https://github.com/example/project.git",
+                    ref="main",
+                )
+
+        self.assertTrue(report.used_local_copy)
+        self.assertEqual(report.repository_state, "offline_local_checkout")
+        self.assertFalse(report.remote_reachable)
+
+    def test_ensure_git_checkout_repairs_wrong_remote_and_falls_back_branch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "repo"
+            (destination / ".git").mkdir(parents=True)
+
+            command_results = [
+                CompletedProcess(args=[], returncode=0, stdout=".git\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="## HEAD (detached at abc123)\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="https://github.com/example/wrong.git\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="ref: refs/heads/main\tHEAD\nabcd\tHEAD\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="  origin/main\n  origin/dev\n", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+                CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            ]
+
+            with patch(
+                "orchestration.runtime_assets.subprocess.run",
+                side_effect=command_results,
+            ):
+                from orchestration.runtime_assets import ensure_git_checkout
+
+                report = ensure_git_checkout(
+                    destination=destination,
+                    repo_url="https://github.com/example/project.git",
+                    ref="feature-does-not-exist",
+                )
+
+        self.assertEqual(report.target_ref, "main")
+        self.assertTrue(report.updated)
+        self.assertIn(
+            "Replaced incorrect origin remote URL.",
+            report.recovery_actions,
+        )
 
 
 if __name__ == "__main__":

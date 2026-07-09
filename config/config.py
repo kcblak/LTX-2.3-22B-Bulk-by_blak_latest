@@ -40,6 +40,8 @@ class Config:
     app_version: str = APP_VERSION
     profile: str = "balanced"
     execution_profile: str = "kaggle_bulk"
+    repository_source: str = "github"
+    repository_update_policy: str = "auto"
     project_id: str = ""
     run_id: str = ""
     correlation_id: str = ""

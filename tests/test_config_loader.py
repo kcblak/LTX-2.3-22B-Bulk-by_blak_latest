@@ -35,6 +35,8 @@ class ConfigLoaderTests(unittest.TestCase):
                     [
                         "model:",
                         "  num_inference_steps: 12",
+                        "repository:",
+                        '  repository_source: "dataset"',
                         "logging:",
                         '  log_level: "DEBUG"',
                         "features:",
@@ -60,6 +62,8 @@ class ConfigLoaderTests(unittest.TestCase):
             self.assertTrue(config.benchmark_mode)
             self.assertEqual(config.project_config_path, project_path)
             self.assertEqual(config.execution_profile, "kaggle_bulk")
+            self.assertEqual(config.repository_source, "dataset")
+            self.assertEqual(config.repository_update_policy, "auto")
             self.assertTrue(config.features["gradio_ui"])
 
 
