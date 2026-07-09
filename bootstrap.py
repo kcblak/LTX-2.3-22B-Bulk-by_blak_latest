@@ -6,6 +6,7 @@ from pathlib import Path
 from config import Config
 from core import BootstrapError
 from logging_system import get_logger
+from orchestration.runtime_assets import verify_runtime_dependencies
 
 logger = get_logger("bootstrap")
 
@@ -17,28 +18,18 @@ def check_python_version() -> None:
 
 
 def check_dependencies(config: Config) -> None:
-    """Check required dependencies are installed for the selected backend."""
-    required = ["torch", "PIL", "numpy", "imageio"]
-
-    backend = (config.renderer_backend or "auto").lower()
-    if backend == "diffusers":
-        required.extend(["diffusers", "transformers", "accelerate"])
-    elif backend == "wan2gp":
-        required.extend(["torch"])
-    elif backend == "auto":
-        if config.wan2gp_dir.exists():
-            required.extend(["torch"])
-        else:
-            required.extend(["diffusers", "transformers", "accelerate"])
-
-    missing = []
-    for package in required:
-        try:
-            __import__(package)
-        except ImportError:
-            missing.append(package)
-    if missing:
-        raise BootstrapError(f"Missing required dependencies: {', '.join(missing)}")
+    """Check required dependencies are installed and the runtime stack is valid."""
+    report = verify_runtime_dependencies(config)
+    if report.missing_required:
+        raise BootstrapError(
+            "Missing required dependencies: " + ", ".join(report.missing_required)
+        )
+    failed_features = [
+        status for status in report.feature_statuses if status.enabled and status.required and status.state == "FAILED"
+    ]
+    if failed_features:
+        messages = [f"{status.feature_key}: {status.reason}" for status in failed_features]
+        raise BootstrapError("Runtime dependency verification failed: " + "; ".join(messages))
 
 
 def check_disk_space() -> None:

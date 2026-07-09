@@ -39,6 +39,7 @@ class Config:
     config_version: str = "1.0"
     app_version: str = APP_VERSION
     profile: str = "balanced"
+    execution_profile: str = "kaggle_bulk"
     project_id: str = ""
     run_id: str = ""
     correlation_id: str = ""
@@ -224,6 +225,34 @@ class Config:
     heartbeat_interval_seconds: int = 60
     health_poll_interval_seconds: int = 30
     sync_heartbeat_to_drive: bool = True
+
+    # Feature-aware dependency management
+    features: Dict[str, bool] = field(
+        default_factory=lambda: {
+            "core_renderer": True,
+            "wan2gp_runtime": True,
+            "diffusers_backend": False,
+            "gguf_runtime": True,
+            "msr_models": True,
+            "google_drive_integration": True,
+            "csv_batch_rendering": True,
+            "resume_engine": True,
+            "video_stitching": True,
+            "reporting": True,
+            "gradio_ui": False,
+            "whisper": False,
+            "audio_processing": False,
+            "speech_recognition": False,
+            "face_restoration": False,
+            "background_removal": False,
+            "image_editing": False,
+            "development_tools": False,
+            "testing_tools": False,
+        }
+    )
+    dependency_allow_experimental: bool = False
+    dependency_allow_pre_release: bool = False
+    dependency_allow_development_wheels: bool = False
 
     # Extra
     extra: Dict[str, Any] = field(default_factory=dict)

@@ -20,31 +20,15 @@ from config import Config, load_config
 from core import APP_NAME, APP_VERSION
 from orchestration.runner import ApplicationRunResult, ApplicationRunner, PreparationResult
 from orchestration.runtime_assets import (
-    ensure_requirement_file,
+    detect_execution_profile,
+    detect_renderer_dependency_profile,
+    ensure_dependency_profile,
+    ensure_runtime_dependency_profile,
+    inspect_dependency_profile,
     ensure_wan2gp_model_assets,
     ensure_wan2gp_runtime,
+    verify_runtime_dependencies,
 )
-
-NOTEBOOK_PACKAGE_SPECS = {
-    "yaml": "PyYAML",
-    "PIL": "Pillow",
-    "numpy": "numpy",
-    "imageio": "imageio",
-    "imageio_ffmpeg": "imageio-ffmpeg",
-    "psutil": "psutil",
-    "googleapiclient": "google-api-python-client",
-    "google.auth": "google-auth",
-    "google_auth_oauthlib": "google-auth-oauthlib",
-    "torch": "torch",
-    "torchvision": "torchvision",
-    "diffusers": "diffusers",
-    "transformers": "transformers",
-    "accelerate": "accelerate",
-    "huggingface_hub": "huggingface-hub",
-    "safetensors": "safetensors",
-    "mmgp": "mmgp",
-    "gguf": "gguf",
-}
 CRITICAL_REPOSITORY_FILES = [
     Path("main.py"),
     Path("bootstrap.py"),
@@ -217,22 +201,26 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def inspect_runtime_dependencies() -> DependencyInspection:
+def inspect_runtime_dependencies(config: Optional[Config] = None) -> DependencyInspection:
+    report = (
+        verify_runtime_dependencies(config)
+        if config is not None
+        else inspect_dependency_profile("bootstrap")
+    )
     packages: list[PackageInspection] = []
-    missing_packages: list[str] = []
-    for module_name, package_name in NOTEBOOK_PACKAGE_SPECS.items():
-        installed = importlib.util.find_spec(module_name) is not None
-        version = _safe_version(package_name) if installed else ""
+    missing_packages = list(report.missing_required)
+    for status in report.statuses:
+        if not status.selected:
+            continue
+        version = _safe_version(status.package_name) if status.installed else ""
         packages.append(
             PackageInspection(
-                module_name=module_name,
-                package_name=package_name,
-                installed=installed,
+                module_name=status.import_name or status.package_name,
+                package_name=status.package_name,
+                installed=status.installed,
                 version=version,
             )
         )
-        if not installed:
-            missing_packages.append(package_name)
 
     ffmpeg_path = shutil.which("ffmpeg")
     ffmpeg_version = ""
@@ -274,10 +262,14 @@ def inspect_runtime_dependencies() -> DependencyInspection:
 
 
 def ensure_notebook_dependencies() -> DependencyInspection:
-    inspection = inspect_runtime_dependencies()
-    if inspection.missing_packages:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-q", *inspection.missing_packages]
+    report = ensure_dependency_profile("bootstrap")
+    if report.failed_required:
+        failure = report.failed_required[0]
+        raise RuntimeError(
+            f"Bootstrap dependency install failed for {failure.package_name} "
+            f"(exit_code={failure.exit_code}).\n"
+            f"stdout:\n{failure.stdout or '<empty>'}\n"
+            f"stderr:\n{failure.stderr or '<empty>'}"
         )
     return inspect_runtime_dependencies()
 
@@ -716,21 +708,77 @@ class KaggleNotebookLauncher:
 
         reports: dict[str, Any] = {
             "source_root": str(self.context.source_root),
-            "repository_requirements": [],
+            "dependency_profile": None,
             "wan2gp_runtime": None,
             "wan2gp_assets": None,
         }
 
-        requirements_report = ensure_requirement_file(self.source_root / "requirements.txt")
-        reports["repository_requirements"].append(
-            {
-                "path": str(requirements_report.path),
-                "installed": requirements_report.installed_requirements,
-                "skipped": requirements_report.skipped_requirements,
-            }
-        )
+        dependency_report = ensure_runtime_dependency_profile(self.context.config)
+        reports["dependency_profile"] = {
+            "profile_name": dependency_report.profile_name,
+            "renderer_backend": dependency_report.renderer_backend,
+            "python_version": dependency_report.python_version,
+            "torch_version": dependency_report.torch_version,
+            "cuda_version": dependency_report.cuda_version,
+            "enabled_features": dependency_report.enabled_features,
+            "disabled_features": dependency_report.disabled_features,
+            "selected_requirements": dependency_report.selected_requirements,
+            "installed_packages": [
+                item.package_name for item in dependency_report.installed_packages
+            ],
+            "skipped_packages": [
+                {"package": item.package_name, "reason": item.reason}
+                for item in dependency_report.skipped_packages
+            ],
+            "failed_optional": [
+                {
+                    "package": item.package_name,
+                    "exit_code": item.exit_code,
+                    "stdout": item.stdout,
+                    "stderr": item.stderr,
+                }
+                for item in dependency_report.failed_optional
+            ],
+            "verification": [
+                {
+                    "name": check.name,
+                    "success": check.success,
+                    "details": check.details,
+                    "feature_key": check.feature_key,
+                }
+                for check in dependency_report.verification_checks
+            ],
+            "feature_statuses": [
+                {
+                    "feature_key": status.feature_key,
+                    "enabled": status.enabled,
+                    "required": status.required,
+                    "state": status.state,
+                    "reason": status.reason,
+                }
+                for status in dependency_report.feature_statuses
+            ],
+        }
+        if dependency_report.failed_required:
+            failure = dependency_report.failed_required[0]
+            raise RuntimeError(
+                f"Required dependency install failed for {failure.package_name} "
+                f"(exit_code={failure.exit_code}).\n"
+                f"stdout:\n{failure.stdout or '<empty>'}\n"
+                f"stderr:\n{failure.stderr or '<empty>'}"
+            )
+        failed_checks = [
+            status
+            for status in dependency_report.feature_statuses
+            if status.enabled and status.required and status.state == "FAILED"
+        ]
+        if failed_checks:
+            raise RuntimeError(
+                "Runtime dependency verification failed: "
+                + "; ".join(f"{status.feature_key}={status.reason}" for status in failed_checks)
+            )
 
-        if self.context.config.renderer_backend in {"auto", "wan2gp"}:
+        if detect_renderer_dependency_profile(self.context.config) == "wan2gp":
             runtime_report = ensure_wan2gp_runtime(self.context.config)
             asset_report = ensure_wan2gp_model_assets(self.context.config)
             asset_report.runtime_report = runtime_report
@@ -745,18 +793,25 @@ class KaggleNotebookLauncher:
                 "model_dir": str(asset_report.model_dir),
                 "downloaded_files": asset_report.downloaded_files,
                 "existing_files": asset_report.existing_files,
-                "requirements": [
+                "dependency_profile": (
                     {
-                        "path": str(report.path),
-                        "installed": report.installed_requirements,
-                        "skipped": report.skipped_requirements,
+                        "profile_name": asset_report.dependency_report.profile_name,
+                        "installed_packages": [
+                            item.package_name
+                            for item in asset_report.dependency_report.installed_packages
+                        ],
+                        "failed_optional": [
+                            item.package_name
+                            for item in asset_report.dependency_report.failed_optional
+                        ],
                     }
-                    for report in asset_report.requirement_reports
-                ],
+                    if asset_report.dependency_report is not None
+                    else None
+                ),
             }
 
         self.context.runtime_preparation = reports
-        self.context.dependency_inspection = inspect_runtime_dependencies()
+        self.context.dependency_inspection = inspect_runtime_dependencies(self.context.config)
         self.context.config.extra["runtime_preparation"] = reports
         return reports
 
@@ -825,7 +880,11 @@ class KaggleNotebookLauncher:
                 "## Repository Validation",
                 f"- Critical Components Ready: `{self.context.repo_validation.ready}`",
                 f"- Optional Missing: `{', '.join(self.context.repo_validation.optional_missing) or 'None'}`",
-                f"- Repository Requirements Installed: `{sum(len(item['installed']) for item in runtime_preparation.get('repository_requirements', []))}`",
+                f"- Dependency Profile: `{(runtime_preparation.get('dependency_profile') or {}).get('profile_name', 'bootstrap')}`",
+                f"- Execution Profile: `{detect_execution_profile(self.context.config)}`",
+                f"- Enabled Features: `{', '.join((runtime_preparation.get('dependency_profile') or {}).get('enabled_features', [])) or 'None'}`",
+                f"- Disabled Features: `{len((runtime_preparation.get('dependency_profile') or {}).get('disabled_features', {}))}`",
+                f"- Packages Installed This Run: `{len((runtime_preparation.get('dependency_profile') or {}).get('installed_packages', []))}`",
                 f"- Wan2GP Runtime Prepared: `{bool(runtime_preparation.get('wan2gp_runtime'))}`",
                 f"- Wan2GP Assets Downloaded: `{len((runtime_preparation.get('wan2gp_assets') or {}).get('downloaded_files', []))}`",
                 "",

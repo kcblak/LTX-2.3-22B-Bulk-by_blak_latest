@@ -22,6 +22,10 @@ class ConfigLoaderTests(unittest.TestCase):
                         "  num_inference_steps: 8",
                         "drive:",
                         "  enable_drive_upload: false",
+                        "features:",
+                        "  gradio_ui: false",
+                        "execution:",
+                        '  execution_profile: "kaggle_bulk"',
                     ]
                 ),
                 encoding="utf-8",
@@ -33,6 +37,8 @@ class ConfigLoaderTests(unittest.TestCase):
                         "  num_inference_steps: 12",
                         "logging:",
                         '  log_level: "DEBUG"',
+                        "features:",
+                        "  gradio_ui: true",
                     ]
                 ),
                 encoding="utf-8",
@@ -53,6 +59,8 @@ class ConfigLoaderTests(unittest.TestCase):
             self.assertFalse(config.enable_drive_upload)
             self.assertTrue(config.benchmark_mode)
             self.assertEqual(config.project_config_path, project_path)
+            self.assertEqual(config.execution_profile, "kaggle_bulk")
+            self.assertTrue(config.features["gradio_ui"])
 
 
 if __name__ == "__main__":

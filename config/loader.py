@@ -70,6 +70,7 @@ def _flatten_config_sections(data: dict[str, Any]) -> dict[str, Any]:
             "logging",
             "observability",
             "reports",
+            "execution",
         }:
             flattened.update(value)
         else:
@@ -83,7 +84,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
         if (
             isinstance(value, dict)
             and isinstance(merged.get(key), dict)
-            and key == "extra"
+            and key in {"extra", "features"}
         ):
             merged[key] = _deep_merge(merged[key], value)
         else:

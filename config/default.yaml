@@ -156,3 +156,30 @@ reports:
   benchmark_json_path: "outputs/benchmark.json"
   benchmark_csv_path: "outputs/benchmark.csv"
   performance_summary_path: "outputs/performance_summary.txt"
+
+execution:
+  execution_profile: "kaggle_bulk"
+  dependency_allow_experimental: false
+  dependency_allow_pre_release: false
+  dependency_allow_development_wheels: false
+
+features:
+  core_renderer: true
+  wan2gp_runtime: true
+  diffusers_backend: false
+  gguf_runtime: true
+  msr_models: true
+  google_drive_integration: true
+  csv_batch_rendering: true
+  resume_engine: true
+  video_stitching: true
+  reporting: true
+  gradio_ui: false
+  whisper: false
+  audio_processing: false
+  speech_recognition: false
+  face_restoration: false
+  background_removal: false
+  image_editing: false
+  development_tools: false
+  testing_tools: false
