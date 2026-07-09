@@ -182,7 +182,12 @@ class LTXVideoRenderer(IRenderer):
                 raise RendererInitializationError(
                     "Diffusers assets are not ready. See asset_report.json for details."
                 )
-            model_path = self.config.extra.get("diffusers_model_dir") or self.config.model_name
+            registry = ((self.config.extra or {}).get("model_registry") or {}).get("entries", {})
+            model_entry = registry.get("diffusers_model")
+            if model_entry and model_entry.get("status") == "found":
+                model_path = model_entry["actual_path"]
+            else:
+                model_path = self.config.extra.get("diffusers_model_dir") or self.config.model_name
             self.pipeline = LTXVideoPipeline.from_pretrained(
                 model_path,
                 torch_dtype=self.dtype,

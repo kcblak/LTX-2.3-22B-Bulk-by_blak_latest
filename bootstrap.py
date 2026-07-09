@@ -117,6 +117,17 @@ def check_gpu(config: Config) -> None:
 
 
 def check_model_assets(config: Config) -> None:
+    from orchestration.runtime_assets import ensure_model_registry
+
+    registry = ensure_model_registry(config)
+    missing = registry.status()["missing"]
+    if not missing:
+        logger.info(
+            "Model registry found %d assets; skipping download preparation.",
+            registry.status()["found_count"],
+            extra={"job_id": "N/A"},
+        )
+        return
     from assets import AssetManager
 
     report = AssetManager(config).ensure_assets()

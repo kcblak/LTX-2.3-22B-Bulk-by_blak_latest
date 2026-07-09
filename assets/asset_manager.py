@@ -253,6 +253,74 @@ class AssetManager:
             )
         return entries
 
+    def _link_from_registry(
+        self, manifest: AssetManifest, registry: dict[str, Any]
+    ) -> list[AssetStateEntry]:
+        entries: list[AssetStateEntry] = []
+        registry_entries = {e["asset_key"]: e for e in registry.get("entries", [])}
+        for spec in manifest.assets:
+            started_at = datetime.now().isoformat()
+            destination = cache_subdir / spec.filename
+            destination_path = destination
+            if not destination_path.is_absolute():
+                destination_path = self.paths.cache_root / destination
+            reg_entry = registry_entries.get(spec.key)
+            if reg_entry is None or reg_entry.get("status") != "found":
+                status = "FAILED" if spec.required else "SKIPPED"
+                entries.append(
+                    AssetStateEntry(
+                        asset_key=spec.key,
+                        status=status,
+                        source="registry",
+                        path=str(destination_path),
+                        size_bytes=0,
+                        sha256="",
+                        started_at=started_at,
+                        completed_at=datetime.now().isoformat(),
+                        notes=["not_found_in_registry"],
+                    )
+                )
+                continue
+            candidate_path = Path(reg_entry["actual_path"])
+            validation = self.validator.validate(spec, candidate_path)
+            if not validation.ok:
+                status = "FAILED" if spec.required else "SKIPPED"
+                entries.append(
+                    AssetStateEntry(
+                        asset_key=spec.key,
+                        status=status,
+                        source=reg_entry.get("source", "registry"),
+                        path=str(destination_path),
+                        size_bytes=validation.size_bytes,
+                        sha256=validation.sha256,
+                        started_at=started_at,
+                        completed_at=datetime.now().isoformat(),
+                        notes=[validation.reason],
+                    )
+                )
+                continue
+            decision = self.cache.link_or_copy(
+                AssetCandidate(
+                    source=reg_entry.get("source", "registry"),
+                    path=candidate_path,
+                ),
+                destination_path,
+            )
+            entries.append(
+                AssetStateEntry(
+                    asset_key=spec.key,
+                    status="READY",
+                    source=reg_entry.get("source", "registry"),
+                    path=decision.destination_path,
+                    size_bytes=validation.size_bytes,
+                    sha256=validation.sha256 or (spec.sha256 or ""),
+                    started_at=started_at,
+                    completed_at=datetime.now().isoformat(),
+                    notes=[decision.action],
+                )
+            )
+        return entries
+
     def ensure_assets(self, *, backend: Optional[str] = None) -> AssetReport:
         started_at = datetime.now().isoformat()
         backend = backend or self.resolve_backend()
@@ -264,6 +332,11 @@ class AssetManager:
         report_entries: list[AssetStateEntry] = []
         report_notes: list[str] = []
         self.cleanup.ensure_temp_root()
+
+        registry = None
+        raw_registry = (self.config.extra or {}).get("model_registry")
+        if isinstance(raw_registry, dict):
+            registry = raw_registry
 
         complete_source = self._find_complete_source(manifest, cache_subdir)
         if complete_source is not None:
@@ -282,6 +355,27 @@ class AssetManager:
             self._write_reports(report)
             self._apply_config_paths(backend)
             return report
+
+        if registry is not None:
+            registry_missing = [
+                entry["asset_key"]
+                for entry in registry.get("entries", [])
+                if entry.get("status") != "found"
+            ]
+            if not registry_missing:
+                report_entries.extend(self._link_from_registry(manifest, registry))
+                ready = all(entry.status == "READY" for entry in report_entries if entry.asset_key in manifest.keys())
+                report = AssetReport(
+                    backend=backend,
+                    ready=ready,
+                    started_at=started_at,
+                    completed_at=datetime.now().isoformat(),
+                    entries=report_entries,
+                    notes=report_notes + ["assembled_from_model_registry"],
+                )
+                self._write_reports(report)
+                self._apply_config_paths(backend)
+                return report
 
         drive_models_folder_id = None
         if self.drive_client is not None and self.config.enable_drive_model_cache:

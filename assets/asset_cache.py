@@ -47,6 +47,17 @@ class AssetCache:
                 source_path=str(candidate.path),
                 destination_path=str(destination),
             )
+        if candidate.source == "dataset":
+            try:
+                os.symlink(str(candidate.path), str(destination))
+                return CacheDecision(
+                    action="symlink",
+                    source=candidate.source,
+                    source_path=str(candidate.path),
+                    destination_path=str(destination),
+                )
+            except OSError:
+                pass
         try:
             os.link(candidate.path, destination)
             return CacheDecision(

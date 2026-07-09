@@ -24,10 +24,11 @@ from orchestration.runtime_assets import (
     detect_execution_profile,
     detect_renderer_dependency_profile,
     ensure_dependency_profile,
+    ensure_model_registry,
     ensure_runtime_dependency_profile,
-    inspect_dependency_profile,
     ensure_wan2gp_model_assets,
     ensure_wan2gp_runtime,
+    inspect_dependency_profile,
     verify_runtime_dependencies,
 )
 CRITICAL_REPOSITORY_FILES = [
@@ -1473,6 +1474,8 @@ class KaggleNotebookLauncher:
                 except Exception as exc:
                     reports["drive_model_cache"] = {"status": "FAILED", "reason": str(exc)}
 
+            model_registry = ensure_model_registry(self.context.config)
+            reports["model_registry"] = model_registry.to_dict()
             asset_report = ensure_wan2gp_model_assets(self.context.config, drive_client=drive_client)
             reports["wan2gp_runtime"] = {
                 "destination": str(runtime_report.destination),

@@ -58,6 +58,21 @@ class Wan2GPLTXRenderer(LTXVideoRenderer):
             return self.config.wan2gp_model_dir.resolve(strict=False)
         return (self.config.wan2gp_dir / "models").resolve(strict=False)
 
+    def _resolve_asset_path(self, logical_name: str, fallback: str) -> Path:
+        registry = ((self.config.extra or {}).get("model_registry") or {}).get("entries", {})
+        entry = registry.get(logical_name)
+        if entry and entry.get("status") == "found":
+            return Path(entry["actual_path"])
+        model_dir = self._resolve_model_dir()
+        return model_dir / fallback
+
+    def _asset_source(self, logical_name: str) -> str:
+        registry = ((self.config.extra or {}).get("model_registry") or {}).get("entries", {})
+        entry = registry.get(logical_name)
+        if entry and entry.get("status") == "found":
+            return entry.get("source", "registry")
+        return "local"
+
     def _resolve_text_encoder_filename(self, text_encoder_dir: Path) -> Optional[str]:
         if self.config.wan2gp_text_encoder_filename:
             return self.config.wan2gp_text_encoder_filename
@@ -103,15 +118,11 @@ class Wan2GPLTXRenderer(LTXVideoRenderer):
         if isinstance(shared_state, dict):
             shared_state["_attention"] = "sdpa"
 
-    def _load_msr_lora(self, model_dir: Path) -> None:
+    def _load_msr_lora(self) -> None:
         if not self.config.wan2gp_msr_enabled:
             return
 
-        lora_path = model_dir / self.config.wan2gp_lora_filename
-        if not lora_path.exists():
-            nested_lora_path = model_dir / "loras" / "ltx2" / self.config.wan2gp_lora_filename
-            if nested_lora_path.exists():
-                lora_path = nested_lora_path
+        lora_path = self._resolve_asset_path("lora", self.config.wan2gp_lora_filename)
         if not lora_path.exists():
             logger.warning(
                 f"MSR LoRA not found, skipping: {lora_path}",
@@ -144,9 +155,9 @@ class Wan2GPLTXRenderer(LTXVideoRenderer):
 
         self._prepare_runtime_environment()
         start = time.perf_counter()
-        model_dir = self._resolve_model_dir()
-        transformer_path = model_dir / self.config.wan2gp_transformer_filename
-        text_encoder_dir = model_dir / self.config.wan2gp_text_encoder_dirname
+        transformer_path = self._resolve_asset_path("transformer", self.config.wan2gp_transformer_filename)
+        text_encoder_path = self._resolve_asset_path("text_encoder", self.config.wan2gp_text_encoder_dirname)
+        text_encoder_dir = text_encoder_path if text_encoder_path.is_dir() else text_encoder_path.parent
         text_encoder_filename = self._resolve_text_encoder_filename(text_encoder_dir)
 
         try:
@@ -179,7 +190,7 @@ class Wan2GPLTXRenderer(LTXVideoRenderer):
 
             self.pipeline = getattr(self.model_handler, "pipe", self.model_handler)
             self._apply_mmgp_profile()
-            self._load_msr_lora(model_dir)
+            self._load_msr_lora()
 
             total_vram, free_vram = self._get_vram_stats()
             self.session_info = RendererSessionInfo(
@@ -196,7 +207,9 @@ class Wan2GPLTXRenderer(LTXVideoRenderer):
                 (
                     "Wan2GP renderer initialized "
                     f"checkpoint={transformer_path.name} "
+                    f"checkpoint_source={self._asset_source('transformer')} "
                     f"text_encoder={text_encoder_filename or 'auto'} "
+                    f"text_encoder_source={self._asset_source('text_encoder')} "
                     f"mmgp_profile={self.config.wan2gp_mmgp_profile}"
                 ),
                 extra={"job_id": "N/A"},

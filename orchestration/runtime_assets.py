@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from config import Config
+from models import ModelRegistry, ModelResolver
 
 
 _REQUIREMENT_NAME_PATTERN = re.compile(r"^\s*([A-Za-z0-9_.\-]+)")
@@ -2016,8 +2017,37 @@ def ensure_wan2gp_runtime(config: Config) -> GitCheckoutReport:
 
 
 def ensure_wan2gp_model_assets(config: Config, *, drive_client: Optional[object] = None) -> dict[str, Any]:
+    registry = ensure_model_registry(config)
+    missing = registry.status()["missing"]
     from assets import AssetManager
 
     manager = AssetManager(config, drive_client=drive_client)
     report = manager.ensure_assets(backend="wan2gp")
+    if not missing:
+        report.notes.append(f"Model registry found {registry.status()['found_count']} assets; skipped downloads.")
     return report.to_dict()
+
+
+def ensure_model_registry(config: Config) -> ModelRegistry:
+    backend = (config.renderer_backend or "auto").strip().lower()
+    if backend == "auto":
+        backend = "wan2gp" if _is_kaggle_runtime() else "wan2gp"
+    resolver = ModelResolver(backend=backend)
+    registry = resolver.build_wan2gp_registry(config)
+    if backend == "diffusers":
+        registry = resolver.build_diffusers_registry(config)
+    missing = registry.status()["missing"]
+    if missing:
+        import sys
+
+        print(
+            f"Model registry missing assets during preflight: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+    config.extra["model_registry"] = registry.to_dict()
+    try:
+        report_dir = config.asset_report_dir.resolve(strict=False)
+        registry.write_reports(report_dir)
+    except Exception:
+        pass
+    return registry
