@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from orchestration.kaggle import (
+    detect_source_root,
     discover_drive_credentials,
     discover_kaggle_project,
     validate_repository_layout,
@@ -55,6 +56,47 @@ class KaggleLauncherTests(unittest.TestCase):
 
             self.assertTrue(discovered.enabled)
             self.assertEqual(discovered.source, "env:LTX_DRIVE_CREDENTIALS_JSON")
+
+    def test_detect_source_root_prefers_src_layout_when_markers_exist(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            source_root = repo_root / "src"
+            (source_root / "config").mkdir(parents=True)
+            (source_root / "orchestration").mkdir()
+            (source_root / "main.py").write_text("", encoding="utf-8")
+
+            detected = detect_source_root(repo_root)
+
+            self.assertEqual(detected, source_root)
+
+    def test_validate_repository_layout_uses_src_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            source_root = repo_root / "src"
+            for relative_path in [
+                "main.py",
+                "bootstrap.py",
+                "config/default.yaml",
+                "config/loader.py",
+                "engine/pipeline.py",
+                "renderers/base.py",
+                "renderers/factory.py",
+                "reports/report_generator.py",
+                "validation/validators.py",
+                "drive/gdrive.py",
+                "drive/sync_engine.py",
+                "stitching/service.py",
+                "stitching/ffmpeg_wrapper.py",
+                "orchestration/__init__.py",
+            ]:
+                target = source_root / relative_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("", encoding="utf-8")
+
+            result = validate_repository_layout(repo_root)
+
+            self.assertTrue(result.ready)
+            self.assertEqual(result.optional_missing, [])
 
 
 if __name__ == "__main__":

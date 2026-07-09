@@ -109,6 +109,10 @@ class Wan2GPLTXRenderer(LTXVideoRenderer):
 
         lora_path = model_dir / self.config.wan2gp_lora_filename
         if not lora_path.exists():
+            nested_lora_path = model_dir / "loras" / "ltx2" / self.config.wan2gp_lora_filename
+            if nested_lora_path.exists():
+                lora_path = nested_lora_path
+        if not lora_path.exists():
             logger.warning(
                 f"MSR LoRA not found, skipping: {lora_path}",
                 extra={"job_id": "N/A"},

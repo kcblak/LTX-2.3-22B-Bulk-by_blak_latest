@@ -1,4 +1,4 @@
-﻿[build-system]
+[build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
@@ -15,8 +15,16 @@ dependencies = [
   "PyYAML>=6.0.1",
   "numpy>=1.26.0",
   "torch>=2.2.0",
+  "torchvision>=0.17.0",
   "imageio>=2.34.0",
   "imageio-ffmpeg>=0.4.9",
+  "diffusers>=0.31.0",
+  "transformers>=4.44.0",
+  "accelerate>=0.33.0",
+  "huggingface-hub>=0.24.0",
+  "safetensors>=0.4.3",
+  "mmgp>=3.2.0",
+  "gguf>=0.10.0",
   "google-api-python-client>=2.130.0",
   "google-auth>=2.29.0",
   "google-auth-oauthlib>=1.2.0",
@@ -28,4 +36,4 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["cache_system*","config*","core*","diagnostics*","drive*","engine*","jobs*","logging_system*","observability*","preflight*","renderers*","reports*","storage*","stitching*","utils*","validation*"]
+include = ["cache_system*","config*","core*","diagnostics*","drive*","engine*","jobs*","logging_system*","observability*","orchestration*","preflight*","renderers*","reports*","storage*","stitching*","utils*","validation*"]

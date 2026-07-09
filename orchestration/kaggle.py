@@ -19,6 +19,11 @@ from bootstrap import collect_environment_info
 from config import Config, load_config
 from core import APP_NAME, APP_VERSION
 from orchestration.runner import ApplicationRunResult, ApplicationRunner, PreparationResult
+from orchestration.runtime_assets import (
+    ensure_requirement_file,
+    ensure_wan2gp_model_assets,
+    ensure_wan2gp_runtime,
+)
 
 NOTEBOOK_PACKAGE_SPECS = {
     "yaml": "PyYAML",
@@ -35,6 +40,10 @@ NOTEBOOK_PACKAGE_SPECS = {
     "diffusers": "diffusers",
     "transformers": "transformers",
     "accelerate": "accelerate",
+    "huggingface_hub": "huggingface-hub",
+    "safetensors": "safetensors",
+    "mmgp": "mmgp",
+    "gguf": "gguf",
 }
 CRITICAL_REPOSITORY_FILES = [
     Path("main.py"),
@@ -46,6 +55,11 @@ CRITICAL_REPOSITORY_FILES = [
     Path("renderers/factory.py"),
     Path("reports/report_generator.py"),
     Path("validation/validators.py"),
+]
+SOURCE_ROOT_MARKERS = [
+    Path("main.py"),
+    Path("config"),
+    Path("orchestration"),
 ]
 OPTIONAL_REPOSITORY_FILES = [
     Path("drive/gdrive.py"),
@@ -118,6 +132,7 @@ class ProjectDiscovery:
     project_config_path: Optional[Path]
     manifest_seed_path: Optional[Path]
     cache_seed_path: Optional[Path]
+    preset_paths: list[Path]
     project_name: str
     image_match_count: int
     notes: list[str] = field(default_factory=list)
@@ -153,7 +168,9 @@ class NotebookLaunchContext:
     config: Config
     environment_info: dict[str, Any]
     resume_summary: ResumeSummary
-    preparation: PreparationResult
+    source_root: Path
+    runtime_preparation: dict[str, Any] = field(default_factory=dict)
+    preparation: Optional[PreparationResult] = None
 
 
 def _safe_version(package_name: str) -> str:
@@ -265,16 +282,25 @@ def ensure_notebook_dependencies() -> DependencyInspection:
     return inspect_runtime_dependencies()
 
 
+def detect_source_root(repo_root: Path) -> Path:
+    candidates = [repo_root, repo_root / "src"]
+    for candidate in candidates:
+        if all((candidate / marker).exists() for marker in SOURCE_ROOT_MARKERS):
+            return candidate
+    return repo_root
+
+
 def validate_repository_layout(repo_root: Path) -> RepositoryValidation:
+    source_root = detect_source_root(repo_root)
     critical_missing = [
         str(relative_path)
         for relative_path in CRITICAL_REPOSITORY_FILES
-        if not (repo_root / relative_path).exists()
+        if not (source_root / relative_path).exists()
     ]
     optional_missing = [
         str(relative_path)
         for relative_path in OPTIONAL_REPOSITORY_FILES
-        if not (repo_root / relative_path).exists()
+        if not (source_root / relative_path).exists()
     ]
     return RepositoryValidation(
         repo_root=repo_root,
@@ -304,6 +330,19 @@ def _find_nearest_config(jobs_csv_path: Path, input_root: Path) -> Optional[Path
             break
         current = current.parent
     return None
+
+
+def _find_nearest_presets(jobs_csv_path: Path, input_root: Path) -> list[Path]:
+    presets: list[Path] = []
+    current = jobs_csv_path.parent
+    while True:
+        for pattern in ("preset*.yaml", "preset*.yml", "preset*.json"):
+            presets.extend(sorted(current.glob(pattern)))
+        if current == input_root or current.parent == current:
+            break
+        current = current.parent
+    deduped: dict[str, Path] = {str(path): path for path in presets}
+    return list(deduped.values())
 
 
 def _score_reference_root(root: Path, image_refs: list[str]) -> int:
@@ -359,6 +398,7 @@ def discover_kaggle_project(input_root: Path = Path("/kaggle/input")) -> Project
     for jobs_csv_path in jobs_candidates:
         reference_root, image_match_count = _discover_reference_root(jobs_csv_path, input_root)
         project_config_path = _find_nearest_config(jobs_csv_path, input_root)
+        preset_paths = _find_nearest_presets(jobs_csv_path, input_root)
         current = jobs_csv_path.parent
         manifest_seed_path: Optional[Path] = None
         cache_seed_path: Optional[Path] = None
@@ -388,6 +428,7 @@ def discover_kaggle_project(input_root: Path = Path("/kaggle/input")) -> Project
             project_config_path=project_config_path,
             manifest_seed_path=manifest_seed_path,
             cache_seed_path=cache_seed_path,
+            preset_paths=preset_paths,
             project_name=_slugify(dataset_name),
             image_match_count=image_match_count,
             notes=[],
@@ -398,6 +439,10 @@ def discover_kaggle_project(input_root: Path = Path("/kaggle/input")) -> Project
             candidate.notes.append(f"Found resume manifest seed: {manifest_seed_path}")
         if cache_seed_path is not None:
             candidate.notes.append(f"Found cache seed: {cache_seed_path}")
+        if preset_paths:
+            candidate.notes.append(
+                "Found optional presets: " + ", ".join(str(path) for path in preset_paths)
+            )
 
         if best_candidate is None:
             best_candidate = candidate
@@ -581,6 +626,7 @@ def _build_launch_config(
         "heartbeat_interval_seconds": 15,
         "health_poll_interval_seconds": 10,
         "sync_heartbeat_to_drive": drive_credentials.enabled,
+        "wan2gp_dir": working_root / "Wan2GP",
     }
     if not drive_credentials.enabled:
         runtime_overrides["enable_drive_upload"] = False
@@ -624,10 +670,11 @@ class KaggleNotebookLauncher:
         self.repo_root = repo_root.resolve(strict=False)
         self.input_root = input_root
         self.working_root = working_root
+        self.source_root = detect_source_root(self.repo_root)
         self.context: Optional[NotebookLaunchContext] = None
         self.runner: Optional[ApplicationRunner] = None
 
-    def prepare(self) -> NotebookLaunchContext:
+    def bootstrap_context(self) -> NotebookLaunchContext:
         dependency_inspection = inspect_runtime_dependencies()
         repo_validation = validate_repository_layout(self.repo_root)
         if not repo_validation.ready:
@@ -642,14 +689,13 @@ class KaggleNotebookLauncher:
             working_root=self.working_root,
         )
         config, resume_summary = _build_launch_config(
-            self.repo_root,
+            self.source_root,
             discovery,
             drive_credentials,
             working_root=self.working_root,
         )
         environment_info = collect_environment_info(config)
         self.runner = ApplicationRunner(config)
-        preparation = self.runner.prepare()
         self.context = NotebookLaunchContext(
             repo_validation=repo_validation,
             dependency_inspection=dependency_inspection,
@@ -658,8 +704,78 @@ class KaggleNotebookLauncher:
             config=config,
             environment_info=environment_info,
             resume_summary=resume_summary,
-            preparation=preparation,
+            source_root=self.source_root,
         )
+        return self.context
+
+    def prepare_runtime(self) -> dict[str, Any]:
+        if self.context is None:
+            self.bootstrap_context()
+        if self.context is None:
+            raise RuntimeError("Launcher context not prepared")
+
+        reports: dict[str, Any] = {
+            "source_root": str(self.context.source_root),
+            "repository_requirements": [],
+            "wan2gp_runtime": None,
+            "wan2gp_assets": None,
+        }
+
+        requirements_report = ensure_requirement_file(self.source_root / "requirements.txt")
+        reports["repository_requirements"].append(
+            {
+                "path": str(requirements_report.path),
+                "installed": requirements_report.installed_requirements,
+                "skipped": requirements_report.skipped_requirements,
+            }
+        )
+
+        if self.context.config.renderer_backend in {"auto", "wan2gp"}:
+            runtime_report = ensure_wan2gp_runtime(self.context.config)
+            asset_report = ensure_wan2gp_model_assets(self.context.config)
+            asset_report.runtime_report = runtime_report
+            reports["wan2gp_runtime"] = {
+                "destination": str(runtime_report.destination),
+                "repo_url": runtime_report.repo_url,
+                "ref": runtime_report.ref,
+                "cloned": runtime_report.cloned,
+                "updated": runtime_report.updated,
+            }
+            reports["wan2gp_assets"] = {
+                "model_dir": str(asset_report.model_dir),
+                "downloaded_files": asset_report.downloaded_files,
+                "existing_files": asset_report.existing_files,
+                "requirements": [
+                    {
+                        "path": str(report.path),
+                        "installed": report.installed_requirements,
+                        "skipped": report.skipped_requirements,
+                    }
+                    for report in asset_report.requirement_reports
+                ],
+            }
+
+        self.context.runtime_preparation = reports
+        self.context.dependency_inspection = inspect_runtime_dependencies()
+        self.context.config.extra["runtime_preparation"] = reports
+        return reports
+
+    def run_preflight(self) -> PreparationResult:
+        if self.context is None:
+            self.bootstrap_context()
+        if self.runner is None:
+            raise RuntimeError("Application runner not initialized")
+        preparation = self.runner.prepare()
+        if self.context is not None:
+            self.context.preparation = preparation
+        return preparation
+
+    def prepare(self) -> NotebookLaunchContext:
+        self.bootstrap_context()
+        self.prepare_runtime()
+        self.run_preflight()
+        if self.context is None:
+            raise RuntimeError("Launcher context could not be prepared")
         return self.context
 
     def render_startup_banner(self) -> str:
@@ -690,13 +806,18 @@ class KaggleNotebookLauncher:
     def render_preparation_summary(self) -> str:
         if self.context is None:
             raise RuntimeError("Launcher context not prepared")
+        if self.context.preparation is None:
+            raise RuntimeError("Preflight has not been executed")
         preflight = self.context.preparation.preflight
+        runtime_preparation = self.context.runtime_preparation
         return "\n".join(
             [
                 "## Automatic Discovery",
                 f"- Jobs CSV: `{self.context.discovery.jobs_csv_path}`",
                 f"- Reference Images Root: `{self.context.discovery.reference_images_dir}`",
                 f"- Project Config: `{self.context.discovery.project_config_path or 'Not found'}`",
+                f"- Optional Presets: `{len(self.context.discovery.preset_paths)}`",
+                f"- Source Root: `{self.context.source_root}`",
                 f"- Resume Manifest: `{self.context.resume_summary.manifest_path or 'Not found'}`",
                 f"- Cache Index: `{self.context.resume_summary.cache_index_path or 'Not found'}`",
                 f"- Drive Mode: `{self.context.drive_credentials.source}`",
@@ -704,6 +825,9 @@ class KaggleNotebookLauncher:
                 "## Repository Validation",
                 f"- Critical Components Ready: `{self.context.repo_validation.ready}`",
                 f"- Optional Missing: `{', '.join(self.context.repo_validation.optional_missing) or 'None'}`",
+                f"- Repository Requirements Installed: `{sum(len(item['installed']) for item in runtime_preparation.get('repository_requirements', []))}`",
+                f"- Wan2GP Runtime Prepared: `{bool(runtime_preparation.get('wan2gp_runtime'))}`",
+                f"- Wan2GP Assets Downloaded: `{len((runtime_preparation.get('wan2gp_assets') or {}).get('downloaded_files', []))}`",
                 "",
                 "## Resume Detection",
                 f"- Previous Manifest: `{bool(self.context.resume_summary.manifest_path)}`",
@@ -781,12 +905,16 @@ class KaggleNotebookLauncher:
                 f"- Upload Queue: `{snapshot.get('upload_queue', 0)}`",
                 f"- Elapsed Runtime: `{_format_duration(elapsed_seconds)}`",
                 f"- Average Render Time: `{snapshot.get('average_render_time_seconds', 0.0):.2f}s`",
+                f"- Average Upload Time: `{snapshot.get('average_upload_time_seconds', 0.0):.2f}s`",
                 f"- Average Throughput: `{snapshot.get('throughput_jobs_per_hour', 0.0):.2f} jobs/hour`",
                 f"- ETA: `{_format_duration(snapshot.get('eta_seconds'))}`",
                 f"- GPU Utilization: `{snapshot.get('gpu_utilization_percent', 'N/A')}`",
                 f"- VRAM Usage: `{snapshot.get('vram_used_mb', 'N/A')} / {snapshot.get('vram_total_mb', 'N/A')} MB`",
                 f"- CPU Utilization: `{snapshot.get('cpu_percent', 'N/A')}`",
                 f"- RAM Usage: `{snapshot.get('ram_used_mb', 'N/A')} / {snapshot.get('ram_total_mb', 'N/A')} MB`",
+                f"- Disk Free: `{_format_bytes((self.context.environment_info if self.context else {}).get('disk', {}).get('free_bytes'))}`",
+                f"- Google Drive Status: `{self.context.drive_credentials.source if self.context else 'N/A'}`",
+                f"- Resume Status: `completed={self.context.resume_summary.completed_jobs if self.context else 0} remaining={self.context.resume_summary.remaining_jobs if self.context else 0}`",
                 f"- Heartbeat Path: `{self.context.config.heartbeat_path if self.context else 'N/A'}`",
                 f"- Manifest Path: `{self.context.config.manifest_path if self.context else 'N/A'}`",
                 f"- Stitched Output Target: `{stitched_output if stitched_output else 'N/A'}`",
@@ -842,6 +970,8 @@ class KaggleNotebookLauncher:
             self.prepare()
         if self.context is None or self.runner is None:
             raise RuntimeError("Launcher context could not be prepared")
+        if self.context.preparation is None:
+            raise RuntimeError("Preflight has not been executed")
         if not self.context.preparation.ready:
             result = self.runner.run(preflight_only=True)
             _render_markdown(self._render_failure_summary(result))

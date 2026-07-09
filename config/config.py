@@ -99,10 +99,16 @@ class Config:
     empty_cache_interval: int = DEFAULT_EMPTY_CACHE_INTERVAL
     wan2gp_dir: Path = field(default_factory=lambda: Path("Wan2GP"))
     wan2gp_model_dir: Optional[Path] = None
+    wan2gp_repo_url: str = "https://github.com/DeepBeepMeep/Wan2GP.git"
+    wan2gp_repo_ref: str = "main"
     wan2gp_transformer_filename: str = "ltx-2.3-22b-distilled-1.1-Q3_K_M.gguf"
+    wan2gp_transformer_source_filename: str = "LTX-2.3-22B-distilled-1.1-Q3_K_M.gguf"
+    wan2gp_transformer_repo_id: str = "Abiray/LTX-2.3-22B-DISTILLED-1.1-GGUF"
     wan2gp_text_encoder_dirname: str = "gemma-3-12b-it-qat-q4_0-unquantized"
     wan2gp_text_encoder_filename: Optional[str] = None
     wan2gp_lora_filename: str = "LTX-2.3-Licon-MSR-V1.safetensors"
+    wan2gp_companion_repo_id: str = "DeepBeepMeep/LTX-2"
+    wan2gp_lora_source_path: str = "loras/LTX-2.3-Licon-MSR-V1.safetensors"
     wan2gp_base_model_type: str = "ltx2_22B_msr"
     wan2gp_pipeline_variant: str = "distilled"
     wan2gp_msr_enabled: bool = True
@@ -126,6 +132,32 @@ class Config:
             "vae": 1000,
             "*": 1000,
         }
+    )
+    wan2gp_required_companion_files: list[str] = field(
+        default_factory=lambda: [
+            "ltx-2.3-22b_embeddings_connector.safetensors",
+            "ltx-2.3-22b_text_embedding_projection.safetensors",
+            "ltx-2.3-22b_vae.safetensors",
+            "ltx-2.3-22b_audio_vae.safetensors",
+            "ltx-2.3-22b_vocoder.safetensors",
+            "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+            "ltx-2.3-temporal-upscaler-x2-1.0.safetensors",
+        ]
+    )
+    wan2gp_required_text_encoder_files: list[str] = field(
+        default_factory=lambda: [
+            "gemma-3-12b-it-qat-q4_0-unquantized_quanto_bf16_int8.safetensors",
+            "added_tokens.json",
+            "chat_template.json",
+            "config_light.json",
+            "generation_config.json",
+            "preprocessor_config.json",
+            "processor_config.json",
+            "special_tokens_map.json",
+            "tokenizer.json",
+            "tokenizer.model",
+            "tokenizer_config.json",
+        ]
     )
 
     # Drive

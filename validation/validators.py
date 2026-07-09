@@ -815,6 +815,8 @@ class ModelAssetValidator(BaseValidator):
             )
             transformer_path = model_dir / config.wan2gp_transformer_filename
             text_encoder_dir = model_dir / config.wan2gp_text_encoder_dirname
+            lora_path = model_dir / config.wan2gp_lora_filename
+            alternate_lora_path = model_dir / "loras" / "ltx2" / config.wan2gp_lora_filename
             if not transformer_path.exists():
                 yield self._finding(
                     ValidationSeverity.FAIL,
@@ -827,6 +829,47 @@ class ModelAssetValidator(BaseValidator):
                     ValidationSeverity.FAIL,
                     f"Wan2GP text encoder directory not found: {text_encoder_dir}",
                     recommendation="Mount the Gemma text encoder assets before rendering.",
+                    blocking=True,
+                )
+            missing_text_encoder_files = [
+                filename
+                for filename in config.wan2gp_required_text_encoder_files
+                if not (text_encoder_dir / filename).exists()
+            ]
+            if missing_text_encoder_files:
+                yield self._finding(
+                    ValidationSeverity.FAIL,
+                    (
+                        "Wan2GP text encoder directory is missing required files: "
+                        + ", ".join(missing_text_encoder_files)
+                    ),
+                    recommendation="Download the missing tokenizer/config/text-encoder assets before rendering.",
+                    blocking=True,
+                    details={"missing_files": missing_text_encoder_files},
+                )
+            missing_companion_files = [
+                filename
+                for filename in config.wan2gp_required_companion_files
+                if not (model_dir / filename).exists()
+            ]
+            if missing_companion_files:
+                yield self._finding(
+                    ValidationSeverity.FAIL,
+                    "Wan2GP companion assets are missing from the model directory.",
+                    recommendation="Download the required VAE/upscaler/connector assets before rendering.",
+                    blocking=True,
+                    details={"missing_files": missing_companion_files},
+                )
+            if config.wan2gp_msr_enabled and not (
+                lora_path.exists() or alternate_lora_path.exists()
+            ):
+                yield self._finding(
+                    ValidationSeverity.FAIL,
+                    (
+                        "Wan2GP MSR LoRA not found in either expected location: "
+                        f"{lora_path} or {alternate_lora_path}"
+                    ),
+                    recommendation="Download the MSR LoRA asset before rendering.",
                     blocking=True,
                 )
             yield self._finding(
