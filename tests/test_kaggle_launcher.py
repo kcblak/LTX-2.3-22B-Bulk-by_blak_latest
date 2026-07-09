@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 import unittest
 from datetime import datetime
@@ -239,6 +240,23 @@ class KaggleLauncherTests(unittest.TestCase):
             )
             self.assertEqual(state.context.discovery.jobs_csv_path, project_root / "jobs.csv")
             self.assertFalse(any(working_root.iterdir()))
+
+    def test_notebook_uses_hardened_bootstrap_flow(self):
+        notebook_path = Path(__file__).resolve().parents[1] / "notebook" / "kaggle_launcher.ipynb"
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        cell_sources = "\n".join(
+            "".join(cell.get("source", []))
+            for cell in notebook.get("cells", [])
+        )
+
+        self.assertNotIn("subprocess.check_call", cell_sources)
+        self.assertNotIn("git pull --ff-only", cell_sources)
+        self.assertNotIn("install_missing_requirements", cell_sources)
+        self.assertNotIn("context = launcher.bootstrap_context()", cell_sources)
+        self.assertIn("execute_bootstrap_flow()", cell_sources)
+        self.assertIn("execute_pipeline_stage(refresh_seconds=5)", cell_sources)
+        self.assertIn("LTX_REPOSITORY_SOURCE", cell_sources)
+        self.assertIn("LTX_REPOSITORY_UPDATE_POLICY", cell_sources)
 
 
 if __name__ == "__main__":

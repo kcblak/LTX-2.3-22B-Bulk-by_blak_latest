@@ -141,6 +141,16 @@ class DriveSyncEngineTests(unittest.TestCase):
         self.assertEqual(self.job.remote_metadata["file_id"], "remote-1")
         self.assertEqual(len(self.client.uploaded), 1)
 
+    def test_cleanup_is_deferred_when_stitching_is_enabled(self):
+        self.config.enable_stitching = True
+        self.config.drive_cleanup_policy = "delete_uploaded_clips"
+        self.engine.enqueue_job(self.job)
+        task = self.engine.upload_queue.get_nowait()
+        task.local_md5 = "md5"
+        self.engine._process_upload_task(task)
+
+        self.assertTrue(self.output_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

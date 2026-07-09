@@ -373,6 +373,8 @@ class DriveSyncEngine:
     def _apply_cleanup_policy(self, job: Job) -> None:
         if not job.output_path or not job.output_path.exists():
             return
+        if self.config.enable_stitching:
+            return
         if self.config.drive_cleanup_policy == "keep_everything":
             return
         if self.config.drive_cleanup_policy == "delete_uploaded_clips":
