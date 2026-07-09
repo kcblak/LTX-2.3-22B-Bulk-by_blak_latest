@@ -163,7 +163,10 @@ class GoogleDriveClient(IDriveClient):
             project_folder_id = self._ensure_folder(project_name, root_folder_id)
 
         folders: dict[str, str] = {}
-        for folder_name in self.config.drive_required_subfolders:
+        required = list(self.config.drive_required_subfolders)
+        if self.config.enable_drive_model_cache and self.config.drive_model_cache_folder_name not in required:
+            required.append(self.config.drive_model_cache_folder_name)
+        for folder_name in required:
             folders[folder_name] = self._ensure_folder(folder_name, project_folder_id)
 
         self._project_paths = DriveProjectPaths(

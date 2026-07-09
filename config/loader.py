@@ -66,6 +66,7 @@ def _flatten_config_sections(data: dict[str, Any]) -> dict[str, Any]:
             "paths",
             "model",
             "repository",
+            "assets",
             "drive",
             "pipeline",
             "logging",

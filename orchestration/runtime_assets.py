@@ -2015,84 +2015,9 @@ def ensure_wan2gp_runtime(config: Config) -> GitCheckoutReport:
     )
 
 
-def _download_file(
-    *,
-    repo_id: str,
-    filename: str,
-    local_dir: Path,
-    target_path: Path,
-    report: ModelAssetReport,
-) -> None:
-    if target_path.exists():
-        report.existing_files.append(str(target_path))
-        return
+def ensure_wan2gp_model_assets(config: Config, *, drive_client: Optional[object] = None) -> dict[str, Any]:
+    from assets import AssetManager
 
-    from huggingface_hub import hf_hub_download
-
-    local_dir.mkdir(parents=True, exist_ok=True)
-    hf_hub_download(
-        repo_id=repo_id,
-        filename=filename,
-        local_dir=str(local_dir),
-        local_dir_use_symlinks=False,
-    )
-
-    downloaded_path = local_dir / filename
-    downloaded_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    if downloaded_path != target_path and downloaded_path.exists():
-        downloaded_path.replace(target_path)
-    report.downloaded_files.append(str(target_path))
-
-
-def ensure_wan2gp_model_assets(config: Config) -> ModelAssetReport:
-    model_dir = (
-        config.wan2gp_model_dir.resolve(strict=False)
-        if config.wan2gp_model_dir is not None
-        else (config.wan2gp_dir / "models").resolve(strict=False)
-    )
-    report = ModelAssetReport(model_dir=model_dir)
-    report.dependency_report = verify_runtime_dependencies(config)
-
-    transformer_target = model_dir / config.wan2gp_transformer_filename
-    _download_file(
-        repo_id=config.wan2gp_transformer_repo_id,
-        filename=config.wan2gp_transformer_source_filename,
-        local_dir=model_dir,
-        target_path=transformer_target,
-        report=report,
-    )
-
-    for filename in config.wan2gp_required_companion_files:
-        target = model_dir / filename
-        _download_file(
-            repo_id=config.wan2gp_companion_repo_id,
-            filename=filename,
-            local_dir=model_dir,
-            target_path=target,
-            report=report,
-        )
-
-    text_encoder_dir = model_dir / config.wan2gp_text_encoder_dirname
-    for filename in config.wan2gp_required_text_encoder_files:
-        relative_name = f"{config.wan2gp_text_encoder_dirname}/{filename}"
-        target = text_encoder_dir / filename
-        _download_file(
-            repo_id=config.wan2gp_companion_repo_id,
-            filename=relative_name,
-            local_dir=model_dir,
-            target_path=target,
-            report=report,
-        )
-
-    if config.wan2gp_msr_enabled:
-        lora_target = model_dir / config.wan2gp_lora_filename
-        _download_file(
-            repo_id=config.wan2gp_companion_repo_id,
-            filename=config.wan2gp_lora_source_path,
-            local_dir=model_dir,
-            target_path=lora_target,
-            report=report,
-        )
-
-    return report
+    manager = AssetManager(config, drive_client=drive_client)
+    report = manager.ensure_assets(backend="wan2gp")
+    return report.to_dict()

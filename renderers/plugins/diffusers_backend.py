@@ -170,15 +170,23 @@ class LTXVideoRenderer(IRenderer):
 
         start = time.perf_counter()
         try:
+            from assets import AssetManager
             from diffusers import LTXVideoPipeline
 
             logger.info(
                 "Loading LTX rendering pipeline",
                 extra={"job_id": "N/A"},
             )
+            asset_report = AssetManager(self.config).ensure_assets(backend="diffusers")
+            if not asset_report.ready:
+                raise RendererInitializationError(
+                    "Diffusers assets are not ready. See asset_report.json for details."
+                )
+            model_path = self.config.extra.get("diffusers_model_dir") or self.config.model_name
             self.pipeline = LTXVideoPipeline.from_pretrained(
-                self.config.model_name,
+                model_path,
                 torch_dtype=self.dtype,
+                local_files_only=True,
             )
             self._apply_runtime_optimizations()
 

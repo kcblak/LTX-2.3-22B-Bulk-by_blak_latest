@@ -832,6 +832,11 @@ def _build_launch_config(
         "temp_dir": temp_dir,
         "manifest_path": manifest_path,
         "report_path": output_dir / "report.json",
+        "model_cache_dir": working_root / "models",
+        "hf_cache_dir": working_root / "hf_cache",
+        "asset_temp_dir": working_root / "asset_temp",
+        "asset_report_dir": output_dir / "reports" / "assets",
+        "asset_download_manifest_path": output_dir / "manifests" / "download_manifest.json",
         "drive_project_name": discovery.project_name,
         "heartbeat_interval_seconds": 15,
         "health_poll_interval_seconds": 10,
@@ -1455,8 +1460,20 @@ class KaggleNotebookLauncher:
 
         if detect_renderer_dependency_profile(self.context.config) == "wan2gp":
             runtime_report = ensure_wan2gp_runtime(self.context.config)
-            asset_report = ensure_wan2gp_model_assets(self.context.config)
-            asset_report.runtime_report = runtime_report
+            drive_client = None
+            if (
+                self.context.drive_credentials.enabled
+                and self.context.config.enable_drive_model_cache
+            ):
+                try:
+                    from drive.gdrive import GoogleDriveClient
+
+                    drive_client = GoogleDriveClient(self.context.config)
+                    drive_client.connect()
+                except Exception as exc:
+                    reports["drive_model_cache"] = {"status": "FAILED", "reason": str(exc)}
+
+            asset_report = ensure_wan2gp_model_assets(self.context.config, drive_client=drive_client)
             reports["wan2gp_runtime"] = {
                 "destination": str(runtime_report.destination),
                 "repo_url": runtime_report.repo_url,
@@ -1464,26 +1481,8 @@ class KaggleNotebookLauncher:
                 "cloned": runtime_report.cloned,
                 "updated": runtime_report.updated,
             }
-            reports["wan2gp_assets"] = {
-                "model_dir": str(asset_report.model_dir),
-                "downloaded_files": asset_report.downloaded_files,
-                "existing_files": asset_report.existing_files,
-                "dependency_profile": (
-                    {
-                        "profile_name": asset_report.dependency_report.profile_name,
-                        "installed_packages": [
-                            _serialize_pip_result(item)
-                            for item in asset_report.dependency_report.installed_packages
-                        ],
-                        "failed_optional": [
-                            _serialize_pip_result(item)
-                            for item in asset_report.dependency_report.failed_optional
-                        ],
-                    }
-                    if asset_report.dependency_report is not None
-                    else None
-                ),
-            }
+            reports["wan2gp_assets"] = asset_report
+            reports["wan2gp_assets"]["wan2gp_runtime"] = reports["wan2gp_runtime"]
 
         self.context.runtime_preparation = reports
         self.context.dependency_inspection = inspect_runtime_dependencies(self.context.config)

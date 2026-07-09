@@ -116,6 +116,16 @@ def check_gpu(config: Config) -> None:
         logger.warning("CUDA not available, using CPU (this will be slow)", extra={"job_id": "N/A"})
 
 
+def check_model_assets(config: Config) -> None:
+    from assets import AssetManager
+
+    report = AssetManager(config).ensure_assets()
+    if not report.ready:
+        raise BootstrapError(
+            "Model assets are not ready. See asset_report.json for details."
+        )
+
+
 def bootstrap(config: Config) -> None:
     """Run all bootstrap checks."""
     logger.info("Starting bootstrap checks...", extra={"job_id": "N/A"})
@@ -124,4 +134,5 @@ def bootstrap(config: Config) -> None:
     check_disk_space()
     collect_environment_info(config)
     check_gpu(config)
+    check_model_assets(config)
     logger.info("Bootstrap checks passed!", extra={"job_id": "N/A"})

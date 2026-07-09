@@ -83,8 +83,19 @@ model:
     - "tokenizer.model"
     - "tokenizer_config.json"
 
+assets:
+  model_cache_dir: "outputs/models"
+  user_model_dir: null
+  hf_cache_dir: "outputs/hf_cache"
+  asset_temp_dir: "outputs/asset_temp"
+  asset_report_dir: "outputs/reports/assets"
+  asset_download_manifest_path: "outputs/manifests/download_manifest.json"
+  asset_disk_safety_margin_gb: 2.0
+
 drive:
   enable_drive_upload: true
+  enable_drive_model_cache: false
+  drive_model_cache_folder_name: "models"
   drive_credentials_path: null
   drive_folder_id: null
   drive_project_name: "default_project"

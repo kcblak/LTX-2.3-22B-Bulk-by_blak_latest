@@ -163,8 +163,21 @@ class Config:
         ]
     )
 
+    # Assets
+    model_cache_dir: Path = field(default_factory=lambda: DEFAULT_OUTPUT_DIR / "models")
+    user_model_dir: Optional[Path] = None
+    hf_cache_dir: Optional[Path] = field(default_factory=lambda: DEFAULT_OUTPUT_DIR / "hf_cache")
+    asset_temp_dir: Path = field(default_factory=lambda: DEFAULT_OUTPUT_DIR / "asset_temp")
+    asset_report_dir: Path = field(default_factory=lambda: DEFAULT_OUTPUT_DIR / "reports" / "assets")
+    asset_download_manifest_path: Path = field(
+        default_factory=lambda: DEFAULT_OUTPUT_DIR / "manifests" / "download_manifest.json"
+    )
+    asset_disk_safety_margin_gb: float = 2.0
+
     # Drive
     enable_drive_upload: bool = True
+    enable_drive_model_cache: bool = False
+    drive_model_cache_folder_name: str = "models"
     drive_credentials_path: Optional[Path] = None
     drive_folder_id: Optional[str] = None
     drive_project_name: str = "default_project"
