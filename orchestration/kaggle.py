@@ -1395,6 +1395,13 @@ class KaggleNotebookLauncher:
             "wan2gp_assets": None,
         }
 
+        # The Wan2GP runtime must be cloned BEFORE dependency verification because the
+        # verification includes a check that the Wan2GP directory exists. Cloning first
+        # lets that check pass and lets model asset preparation run afterwards.
+        wan2gp_runtime_report = None
+        if detect_renderer_dependency_profile(self.context.config) == "wan2gp":
+            wan2gp_runtime_report = ensure_wan2gp_runtime(self.context.config)
+
         dependency_report = ensure_runtime_dependency_profile(self.context.config)
         reports["dependency_profile"] = {
             "profile_name": dependency_report.profile_name,
@@ -1461,7 +1468,7 @@ class KaggleNotebookLauncher:
             )
 
         if detect_renderer_dependency_profile(self.context.config) == "wan2gp":
-            runtime_report = ensure_wan2gp_runtime(self.context.config)
+            runtime_report = wan2gp_runtime_report
             drive_client = None
             if (
                 self.context.drive_credentials.enabled
