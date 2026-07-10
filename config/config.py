@@ -73,7 +73,10 @@ class Config:
     preview_720p_path: Path = field(default_factory=lambda: DEFAULT_OUTPUT_DIR / "previews" / "preview_720p.mp4")
 
     # Model & Rendering
-    renderer_backend: str = "auto"
+    # Locked to "wan2gp" so the product only ever loads the Kaggle-optimized model set
+    # (ltx-2-3-22b-msr-ref-distilled-1-1-kaggle) and never falls back to a larger,
+    # non-Kaggle Diffusers model on the constrained Kaggle runtime.
+    renderer_backend: str = "wan2gp"
     model_name: str = DEFAULT_MODEL_NAME
     guidance_scale: float = DEFAULT_GUIDANCE_SCALE
     num_inference_steps: int = DEFAULT_NUM_INFERENCE_STEPS

@@ -13,7 +13,12 @@ SUPPORTED_IMAGE_FORMATS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 SUPPORTED_VIDEO_FORMATS = {".mp4", ".mov", ".avi", ".mkv"}
 
 # Model defaults
-DEFAULT_MODEL_NAME = "Lightricks/LTX-Video-2.3-22B-Ref-Distilled-1.1"
+# The product is Kaggle-optimized and restricted to the exact model set shipped by
+# ltx-2-3-22b-msr-ref-distilled-1-1-kaggle (Wan2GP + GGUF transformer + DeepBeepMeep/LTX-2
+# companion files + Licon MSR LoRA + Gemma-3 text encoder). This identifier is the Kaggle
+# transformer model repo; the full wan2gp asset set is enumerated in config/default.yaml and
+# assets/asset_manager.py:_build_wan2gp_manifest.
+DEFAULT_MODEL_NAME = "Abiray/LTX-2.3-22B-DISTILLED-1.1-GGUF"
 DEFAULT_GUIDANCE_SCALE = 3.0
 DEFAULT_NUM_INFERENCE_STEPS = 8
 DEFAULT_SEED = -1  # random
