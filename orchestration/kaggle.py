@@ -16,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from bootstrap import collect_environment_info
 from config import Config, load_config
 from core import APP_NAME, APP_VERSION
 from orchestration.runner import ApplicationRunResult, ApplicationRunner, PreparationResult
@@ -31,6 +30,8 @@ from orchestration.runtime_assets import (
     inspect_dependency_profile,
     verify_runtime_dependencies,
 )
+import bootstrap as _bootstrap_module
+collect_environment_info = _bootstrap_module.collect_environment_info
 CRITICAL_REPOSITORY_FILES = [
     Path("main.py"),
     Path("bootstrap.py"),
@@ -1367,7 +1368,7 @@ class KaggleNotebookLauncher:
             drive_credentials,
             working_root=self.working_root,
         )
-        environment_info = collect_environment_info(config)
+        environment_info = _bootstrap_module.collect_environment_info(config)
         self.runner = ApplicationRunner(config)
         self.context = NotebookLaunchContext(
             repo_validation=repo_validation,

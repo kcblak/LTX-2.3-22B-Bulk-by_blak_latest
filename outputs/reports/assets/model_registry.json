@@ -1,5 +1,82 @@
 {
-  "entries": [],
+  "entries": [
+    {
+      "actual_path": "",
+      "asset_key": "transformer",
+      "backend": "wan2gp",
+      "checksum": "",
+      "dataset_name": null,
+      "logical_name": "transformer",
+      "metadata": {},
+      "model_type": "transformer",
+      "precision": "unknown",
+      "quantization": "UNKNOWN",
+      "size": 0,
+      "status": "missing"
+    },
+    {
+      "actual_path": "",
+      "asset_key": "text_encoder",
+      "backend": "wan2gp",
+      "checksum": "",
+      "dataset_name": null,
+      "logical_name": "text_encoder",
+      "metadata": {},
+      "model_type": "text_encoder",
+      "precision": "unknown",
+      "quantization": "UNKNOWN",
+      "size": 0,
+      "status": "missing"
+    },
+    {
+      "actual_path": "",
+      "asset_key": "vae",
+      "backend": "wan2gp",
+      "checksum": "",
+      "dataset_name": null,
+      "logical_name": "vae",
+      "metadata": {},
+      "model_type": "vae",
+      "precision": "unknown",
+      "quantization": "UNKNOWN",
+      "size": 0,
+      "status": "missing"
+    },
+    {
+      "actual_path": "",
+      "asset_key": "lora",
+      "backend": "wan2gp",
+      "checksum": "",
+      "dataset_name": null,
+      "logical_name": "lora",
+      "metadata": {},
+      "model_type": "lora",
+      "precision": "unknown",
+      "quantization": "UNKNOWN",
+      "size": 0,
+      "status": "missing"
+    },
+    {
+      "actual_path": "",
+      "asset_key": "tokenizer",
+      "backend": "wan2gp",
+      "checksum": "",
+      "dataset_name": null,
+      "logical_name": "tokenizer",
+      "metadata": {},
+      "model_type": "tokenizer",
+      "precision": "unknown",
+      "quantization": "UNKNOWN",
+      "size": 0,
+      "status": "missing"
+    }
+  ],
   "found_count": 0,
-  "missing": []
+  "missing": [
+    "transformer",
+    "text_encoder",
+    "vae",
+    "lora",
+    "tokenizer"
+  ]
 }

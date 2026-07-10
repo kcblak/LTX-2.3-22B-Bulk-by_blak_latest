@@ -125,24 +125,38 @@ class ModelResolver:
                     chosen = sorted(quantized, key=lambda p: p.stat().st_size)[0]
                 else:
                     chosen = sorted(paths, key=lambda p: p.stat().st_size)[0]
-            if chosen is None:
-                continue
-            root_info = root_map.get(chosen.parent.parent, root_map.get(chosen.parent, _DiscoveryRoot(source="unknown", path=chosen.parent)))
-            quantization, precision = _detect_quantization(chosen.name)
-            registry.add(
-                ModelEntry(
-                    logical_name=rtype,
-                    actual_path=chosen.resolve(),
-                    dataset_name=root_info.dataset_name,
-                    backend=self.backend,
-                    model_type=rtype,
-                    precision=precision,
-                    quantization=quantization,
-                    size=_file_size(chosen),
-                    checksum=_sha256_for(chosen),
-                    status="found",
+            if chosen is not None:
+                root_info = root_map.get(chosen.parent.parent, root_map.get(chosen.parent, _DiscoveryRoot(source="unknown", path=chosen.parent)))
+                quantization, precision = _detect_quantization(chosen.name)
+                registry.add(
+                    ModelEntry(
+                        logical_name=rtype,
+                        actual_path=chosen.resolve(),
+                        dataset_name=root_info.dataset_name,
+                        backend=self.backend,
+                        model_type=rtype,
+                        precision=precision,
+                        quantization=quantization,
+                        size=_file_size(chosen),
+                        checksum=_sha256_for(chosen),
+                        status="found",
+                    )
                 )
-            )
+            else:
+                registry.add(
+                    ModelEntry(
+                        logical_name=rtype,
+                        actual_path=Path(),
+                        dataset_name=None,
+                        backend=self.backend,
+                        model_type=rtype,
+                        precision="unknown",
+                        quantization="UNKNOWN",
+                        size=0,
+                        checksum="",
+                        status="missing",
+                    )
+                )
         return registry
 
     def build_wan2gp_registry(self, config: Any) -> ModelRegistry:

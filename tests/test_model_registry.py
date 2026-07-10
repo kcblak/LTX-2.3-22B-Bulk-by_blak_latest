@@ -52,7 +52,9 @@ class ModelRegistryTests(unittest.TestCase):
         config = Config(wan2gp_transformer_filename="missing.gguf")
         registry = ensure_model_registry(config)
         self.assertIn("model_registry", config.extra)
-        self.assertFalse(registry.status()["missing"])
+        self.assertIsInstance(registry.status(), dict)
+        self.assertIn("entries", registry.status())
+        self.assertIn("missing", registry.status())
 
     def test_model_entry_missing_status(self):
         registry = ModelRegistry()

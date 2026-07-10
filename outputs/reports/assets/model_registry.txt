@@ -2,5 +2,55 @@
 MODEL REGISTRY
 ================================================================================
 found_count: 0
-missing: none
+missing: transformer, text_encoder, vae, lora, tokenizer
+
+- transformer:
+    backend: wan2gp
+    model_type: transformer
+    precision: unknown
+    quantization: UNKNOWN
+    size: 0
+    path: .
+    dataset: None
+    status: missing
+
+- text_encoder:
+    backend: wan2gp
+    model_type: text_encoder
+    precision: unknown
+    quantization: UNKNOWN
+    size: 0
+    path: .
+    dataset: None
+    status: missing
+
+- vae:
+    backend: wan2gp
+    model_type: vae
+    precision: unknown
+    quantization: UNKNOWN
+    size: 0
+    path: .
+    dataset: None
+    status: missing
+
+- lora:
+    backend: wan2gp
+    model_type: lora
+    precision: unknown
+    quantization: UNKNOWN
+    size: 0
+    path: .
+    dataset: None
+    status: missing
+
+- tokenizer:
+    backend: wan2gp
+    model_type: tokenizer
+    precision: unknown
+    quantization: UNKNOWN
+    size: 0
+    path: .
+    dataset: None
+    status: missing
 

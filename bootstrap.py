@@ -6,7 +6,6 @@ from pathlib import Path
 from config import Config
 from core import BootstrapError
 from logging_system import get_logger
-from orchestration.runtime_assets import verify_runtime_dependencies
 
 logger = get_logger("bootstrap")
 
@@ -19,6 +18,8 @@ def check_python_version() -> None:
 
 def check_dependencies(config: Config) -> None:
     """Check required dependencies are installed and the runtime stack is valid."""
+    from orchestration.runtime_assets import verify_runtime_dependencies
+
     report = verify_runtime_dependencies(config)
     if report.missing_required:
         raise BootstrapError(

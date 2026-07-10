@@ -1,0 +1,17 @@
+{
+  "wan2gp.transformer.gguf": {
+    "asset_key": "wan2gp.transformer.gguf",
+    "completed_at": "2026-07-09T16:53:16.347387",
+    "download_seconds": 0.0,
+    "notes": [
+      "No module named 'huggingface_hub'"
+    ],
+    "path": "C:\\Users\\USER\\Documents\\GitHub\\LTX-2.3-22B-Bulk-by_blak_latest\\LTX-2.3-22B-Bulk-by_blak_latest\\outputs\\models\\wan2gp\\ltx-2.3-22b-distilled-1.1-Q3_K_M.gguf",
+    "sha256": "",
+    "size_bytes": 0,
+    "source": "hf_download",
+    "started_at": "2026-07-09T16:53:16.346201",
+    "status": "FAILED",
+    "verify_seconds": 0.0
+  }
+}

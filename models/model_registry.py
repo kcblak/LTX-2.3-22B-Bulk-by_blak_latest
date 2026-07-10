@@ -30,9 +30,11 @@ class ModelEntry:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        actual_path_str = str(self.actual_path) if self.actual_path and self.actual_path != Path() else ""
         return {
+            "asset_key": self.logical_name,
             "logical_name": self.logical_name,
-            "actual_path": str(self.actual_path),
+            "actual_path": actual_path_str,
             "dataset_name": self.dataset_name,
             "backend": self.backend,
             "model_type": self.model_type,
